@@ -29,4 +29,6 @@ abstract interface class ScheduleRepository {
       replaceImportedCalendarBlocks(
     List<ScheduleBlock> blocks,
   );
+
+  
 }
