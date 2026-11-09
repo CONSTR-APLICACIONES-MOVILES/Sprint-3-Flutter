@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../domain/entities/weather_forecast.dart';
@@ -17,7 +18,8 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
     final url = Uri.https('api.open-meteo.com', '/v1/forecast', {
       'latitude': '$latitude',
       'longitude': '$longitude',
-      'hourly': 'temperature_2m,precipitation_probability,weather_code',
+      'hourly':
+          'temperature_2m,precipitation_probability,weather_code,is_day',
       'timezone': 'GMT',
       'forecast_days': '7',
     });
@@ -26,17 +28,23 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
     if (response.statusCode != 200) {
       throw StateError('Weather is unavailable right now.');
     }
-    return parseHourlyForecast(jsonDecode(response.body));
+    return compute(parseHourlyForecastBody, response.body);
   }
 }
 
-List<WeatherForecast> parseHourlyForecast(Object? data) {
+List<WeatherForecast> parseHourlyForecastBody(String body) =>
+    parseHourlyForecast(jsonDecode(body));
+
+List<WeatherForecast> parseHourlyForecast(Object? data,
+    {DateTime? fetchedAt}) {
+  final now = fetchedAt ?? DateTime.now();
   final hourly = data is Map ? data['hourly'] : null;
   if (hourly is! Map) return const [];
   final times = hourly['time'];
   final temperatures = hourly['temperature_2m'];
   final rain = hourly['precipitation_probability'];
   final codes = hourly['weather_code'];
+  final days = hourly['is_day'];
   if (times is! List ||
       temperatures is! List ||
       rain is! List ||
@@ -61,7 +69,9 @@ List<WeatherForecast> parseHourlyForecast(Object? data) {
         time: time,
         temperature: temperature.toDouble(),
         rainChance: chance.toInt(),
-        weatherCode: code.toInt()));
+        weatherCode: code.toInt(),
+        isDay: days is List && i < days.length ? days[i] != 0 : true,
+        fetchedAt: now));
   }
   return List.unmodifiable(result);
 }

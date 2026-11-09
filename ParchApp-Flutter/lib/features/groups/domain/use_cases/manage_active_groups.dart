@@ -1,4 +1,5 @@
 import '../../../../core/analytics/analytics_events.dart';
+import '../../../../core/domain/data_freshness.dart';
 import '../../../../core/analytics/analytics_service.dart';
 import '../entities/active_group.dart';
 import '../repositories/active_groups_repository.dart';
@@ -18,13 +19,16 @@ class ManageActiveGroups {
         _now = now ?? DateTime.now;
 
   Future<List<ActiveGroup>> load() => _repository.getActiveGroups();
+  DataFreshness get freshness => _repository is CacheAwareRepository
+      ? (_repository as CacheAwareRepository).freshness
+      : const DataFreshness();
 
   Future<List<ActiveGroup>> confirmRsvp(ActiveGroup group) async {
     if (group.hasResponded) {
-      throw StateError('Your RSVP is already confirmed.');
+      throw StateError('You have already responded to this invitation.');
     }
     if (!group.hasProgress) {
-      throw StateError('This group does not track RSVPs.');
+      throw StateError('This group has no attendance request.');
     }
     if (group.progressCurrent! >= group.progressTotal!) {
       throw StateError('The roster is already full.');
