@@ -63,12 +63,14 @@ class ScheduleDependencies {
     final auth = GoogleCalendarAuthDataSource();
     return ScheduleDependencies(
       firebase: firebase,
-      calendarImportEnabled:
-          const bool.fromEnvironment('ENABLE_GOOGLE_CALENDAR_IMPORT'),
+      calendarImportEnabled: const bool.fromEnvironment(
+        'ENABLE_GOOGLE_CALENDAR_IMPORT',
+        defaultValue: true,
+      ),
       repository: FirebaseScheduleRepository(
-          firebase.mobile, () => firebase.auth.currentUser?.uid,
-          locations: FirestoreFriendLocationsRepository(
-              firestore: firebase.firestore)),
+      firestore: firebase.firestore,
+      auth: firebase.auth,
+    ),
       calendarImportRepository: CalendarImportRepositoryImpl(
           dataSource:
               GoogleFreeBusyDataSource(headers: auth.authorizationHeaders),
@@ -80,11 +82,11 @@ class ScheduleDependencies {
   ScheduleViewModel createViewModel({DateTime? initialDay, String? groupId}) {
     return ScheduleViewModel(
       ManageSchedule(
-        groupId != null && repository is FirebaseScheduleRepository
-            ? (repository as FirebaseScheduleRepository).forGroup(groupId)
-            : repository,
+        repository,
         const AvailabilityService(),
-        firebase == null ? null : const GeolocatorLocationRepository(),
+        firebase == null
+            ? null
+            : const GeolocatorLocationRepository(),
         const DistanceService(),
       ),
       ImportGoogleCalendar(

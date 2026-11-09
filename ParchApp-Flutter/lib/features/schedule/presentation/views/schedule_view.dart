@@ -13,6 +13,7 @@ import '../../domain/entities/schedule_friend.dart';
 import '../../domain/services/duration_input_service.dart';
 import '../view_models/schedule_state.dart';
 import '../view_models/schedule_view_model.dart';
+import '../widgets/schedule_last_updated_banner.dart';
 
 class ScheduleView extends StatefulWidget {
   final ScheduleViewModel viewModel;
@@ -82,6 +83,13 @@ class _ScheduleViewState extends State<ScheduleView> {
                       constraints: const BoxConstraints(maxHeight: 180),
                       child:
                           SingleChildScrollView(child: widget.activityHeader!)),
+                ScheduleLastUpdatedBanner(
+                  state: state,
+                  onRefresh: () {
+                    widget.viewModel.refreshSchedule();
+                  },
+                ),
+
                 _buildFriendBar(
                   context,
                   state,
@@ -95,10 +103,8 @@ class _ScheduleViewState extends State<ScheduleView> {
                 _buildWeekSelector(
                   state,
                 ),
-                if (state.status == ScheduleLoadStatus.loading)
-                  const LinearProgressIndicator(
-                    minHeight: 2,
-                  ),
+
+          
                 if (state.status == ScheduleLoadStatus.error)
                   Expanded(
                     child: _buildErrorState(

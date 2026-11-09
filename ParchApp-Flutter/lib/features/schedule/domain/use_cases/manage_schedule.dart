@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../activities/domain/entities/planning_context.dart';
 import '../entities/common_slot.dart';
 import '../entities/schedule_block.dart';
@@ -127,6 +129,14 @@ class ManageSchedule {
         currentLocation,
         friendLocation,
       );
+      debugPrint(
+        'NEARBY DISTANCE -> '
+        'Friend: ${friend.id} | '
+        'Friend GPS: ${friendLocation.latitude}, ${friendLocation.longitude} | '
+        'My GPS: ${currentLocation.latitude}, ${currentLocation.longitude} | '
+        'Distance: ${distance.toStringAsFixed(2)} m | '
+        'Inside radius: ${distance <= nearbyRadiusMeters}',
+      );
 
       if (distance <= nearbyRadiusMeters) {
         nearby.add(
@@ -162,185 +172,24 @@ class ManageSchedule {
     required List<String> friendIds,
     required Duration duration,
   }) async {
-    // -------------------------------------------------------------
-    // CONCURRENCY STRATEGY
-    //
-    // These two operations are independent:
-    //
-    // 1. Load the current user's private schedule.
-    // 2. Load selected friends' busy intervals.
-    //
-    // We therefore START both operations before awaiting either
-    // result.
-    //
-    // This allows Firestore I/O to happen concurrently instead of:
-    //
-    // my schedule
-    //     ↓ wait
-    // friends
-    //     ↓ wait
-    //
-    // Now:
-    //
-    //          ┌── my schedule
-    // loadDay ─┤
-    //          └── friends availability
-    //
-    // -------------------------------------------------------------
-
-    final stopwatch =
-        Stopwatch()
-          ..start();
-
-    print(
-      'SCHEDULE CONCURRENCY -> '
-      'Starting personal + friends queries concurrently',
+    final myBlocks = await _repository.getMySchedule(
+      day: day,
     );
 
-    // -------------------------------------------------------------
-    // IMPORTANT:
-    //
-    // Calling these methods creates both Futures immediately.
-    //
-    // We intentionally do NOT await the first one before starting
-    // the second one.
-    // -------------------------------------------------------------
-
-    final myBlocksFuture =
-        _repository
-            .getMySchedule(
-      day:
-          day,
+    final friendBlocks = await _repository.getFriendsBusyBlocks(
+      day: day,
+      friendIds: friendIds,
     );
-
-    final friendBlocksFuture =
-        _repository
-            .getFriendsBusyBlocks(
-      day:
-          day,
-      friendIds:
-          friendIds,
-    );
-
-    // -------------------------------------------------------------
-    // Wait until BOTH concurrent operations finish.
-    // -------------------------------------------------------------
-
-    final results =
-        await Future.wait<
-            List<ScheduleBlock>>(
-      [
-        myBlocksFuture,
-        friendBlocksFuture,
-      ],
-    );
-
-    final myBlocks =
-        results[0];
-
-    final friendBlocks =
-        results[1];
-
-    stopwatch.stop();
-
-    print(
-      'SCHEDULE CONCURRENCY -> '
-      'Parallel data loading completed in '
-      '${stopwatch.elapsedMilliseconds} ms',
-    );
-
-    print(
-      'SCHEDULE CONCURRENCY -> '
-      'My blocks: ${myBlocks.length}',
-    );
-
-    print(
-      'SCHEDULE CONCURRENCY -> '
-      'Friend blocks: ${friendBlocks.length}',
-    );
-
-    // -------------------------------------------------------------
-    // Both data sources have completed.
-    //
-    // Now combine every busy period.
-    // -------------------------------------------------------------
-
-    // -------------------------------------------------------------
-    // Wait until BOTH concurrent operations finish.
-    // -------------------------------------------------------------
-
-    final results =
-        await Future.wait<
-            List<ScheduleBlock>>(
-      [
-        myBlocksFuture,
-        friendBlocksFuture,
-      ],
-    );
-
-    final myBlocks =
-        results[0];
-
-    final friendBlocks =
-        results[1];
-
-    stopwatch.stop();
-
-    print(
-      'SCHEDULE CONCURRENCY -> '
-      'Parallel data loading completed in '
-      '${stopwatch.elapsedMilliseconds} ms',
-    );
-
-    print(
-      'SCHEDULE CONCURRENCY -> '
-      'My blocks: ${myBlocks.length}',
-    );
-
-    print(
-      'SCHEDULE CONCURRENCY -> '
-      'Friend blocks: ${friendBlocks.length}',
-    );
-
-    // -------------------------------------------------------------
-    // Both data sources have completed.
-    //
-    // Now combine every busy period.
-    // -------------------------------------------------------------
 
     final busyBlocks = <ScheduleBlock>[
       ...myBlocks,
       ...friendBlocks,
     ];
 
-    // -------------------------------------------------------------
-    // COMMON AVAILABILITY
-    //
-    // This step MUST happen after both concurrent reads finish
-    // because it requires the complete list of busy intervals.
-    // -------------------------------------------------------------
-
-    // -------------------------------------------------------------
-    // COMMON AVAILABILITY
-    //
-    // This step MUST happen after both concurrent reads finish
-    // because it requires the complete list of busy intervals.
-    // -------------------------------------------------------------
-
     final commonSlots = _availabilityService.findCommonSlots(
       day: day,
       busyBlocks: busyBlocks,
       duration: duration,
-    );
-
-    print(
-      'SCHEDULE CONCURRENCY -> '
-      '${commonSlots.length} common slots calculated',
-    );
-
-    print(
-      'SCHEDULE CONCURRENCY -> '
-      '${commonSlots.length} common slots calculated',
     );
 
     return ScheduleDayResult(

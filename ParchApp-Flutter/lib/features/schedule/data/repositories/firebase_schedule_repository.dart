@@ -1,10 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+
 import '../../domain/entities/user_location.dart';
-import 'firestore_friend_locations_repository.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import '../../../activities/domain/entities/study_session.dart'
-    show SessionFailure;
-import '../../../../core/data/mobile_api.dart';
-import '../../../activities/domain/entities/planning_context.dart';
 import '../../domain/entities/schedule_block.dart';
 import '../../domain/entities/schedule_friend.dart';
 import '../../domain/repositories/schedule_repository.dart';
