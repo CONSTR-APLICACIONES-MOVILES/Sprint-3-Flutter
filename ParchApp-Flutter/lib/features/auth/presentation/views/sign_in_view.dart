@@ -1,3 +1,4 @@
+import '../widgets/password_recovery_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +8,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/parch_primary_button.dart';
 import '../view_models/auth_state.dart';
 import '../../domain/entities/authenticated_user.dart';
+import '../../domain/entities/biometric_sign_in.dart';
 import '../view_models/sign_in_view_model.dart';
 import '../widgets/auth_divider.dart';
 import '../widgets/auth_text_field.dart';
@@ -16,7 +18,13 @@ import '../widgets/recognized_user_card.dart';
 
 class SignInView extends StatefulWidget {
   final SignInViewModel viewModel;
-  const SignInView({super.key, required this.viewModel});
+  final Future<void> Function(String)? passwordReset;
+  final bool googleEnabled;
+  const SignInView(
+      {super.key,
+      required this.viewModel,
+      this.passwordReset,
+      this.googleEnabled = true});
 
   @override
   State<SignInView> createState() => _SignInViewState();
@@ -29,6 +37,9 @@ class _SignInViewState extends State<SignInView> {
   bool get isLoading => widget.viewModel.value.isLoading;
   AuthenticatedUser? get recognizedUser =>
       widget.viewModel.value.recognizedUser;
+  BiometricSignIn get biometricSignIn =>
+      widget.viewModel.value.biometricSignIn;
+  bool _rememberWithBiometrics = false;
 
   @override
   void initState() {
@@ -61,7 +72,10 @@ class _SignInViewState extends State<SignInView> {
     if (state.status == AuthStatus.authenticated &&
         previous.status != AuthStatus.authenticated) {
       final destination = GoRouterState.of(context).uri.queryParameters['from'];
-      context.go(destination != null && destination.startsWith('/activities/')
+      context.go(destination != null &&
+              (destination.startsWith('/activities/') ||
+                  destination.startsWith('/join/') ||
+                  destination.startsWith('/groups/'))
           ? destination
           : AppRoutes.home);
     } else if (state.message != null &&
@@ -85,8 +99,10 @@ class _SignInViewState extends State<SignInView> {
   }
 
   void _signIn() {
-    widget.viewModel
-        .signIn(email: emailController.text, password: passwordController.text);
+    widget.viewModel.signIn(
+        email: emailController.text,
+        password: passwordController.text,
+        rememberWithBiometrics: _rememberWithBiometrics);
   }
 
   @override
@@ -119,11 +135,32 @@ class _SignInViewState extends State<SignInView> {
                 ),
                 const SizedBox(height: 18),
               ],
+              if (biometricSignIn == BiometricSignIn.enabled) ...[
+                OutlinedButton.icon(
+                  onPressed:
+                      isLoading ? null : widget.viewModel.signInWithBiometrics,
+                  icon: const Icon(Icons.face_outlined),
+                  label: const Text('Sign in with Face ID'),
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48)),
+                ),
+                TextButton(
+                  onPressed:
+                      isLoading ? null : widget.viewModel.turnOffBiometricSignIn,
+                  child: const Text('Turn off Face ID sign-in'),
+                ),
+                const SizedBox(height: 12),
+              ],
               const AuthDivider(),
               const SizedBox(height: 18),
               GoogleAuthButton(
-                onPressed: isLoading ? null : widget.viewModel.signInWithGoogle,
+                onPressed: isLoading || !widget.googleEnabled
+                    ? null
+                    : widget.viewModel.signInWithGoogle,
               ),
+              if (!widget.googleEnabled)
+                const Text(
+                    'Google sign-in requires provider configuration. Use email and password.'),
               const SizedBox(height: 20),
               AuthTextField(
                 hintText: 'University email',
@@ -139,14 +176,32 @@ class _SignInViewState extends State<SignInView> {
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _signIn(),
               ),
+              if (biometricSignIn == BiometricSignIn.available)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Use Face ID next time'),
+                  value: _rememberWithBiometrics,
+                  onChanged: isLoading
+                      ? null
+                      : (value) =>
+                          setState(() => _rememberWithBiometrics = value),
+                ),
               const SizedBox(height: 4),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: isLoading
                       ? null
-                      : () => _showMessage(
-                          'Password recovery will be implemented next.'),
+                      : widget.passwordReset == null
+                          ? () => _showMessage(
+                              'Password recovery is unavailable in this demo.')
+                          : () => showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              useSafeArea: true,
+                              builder: (_) => PasswordRecoverySheet(
+                                  email: emailController.text,
+                                  request: widget.passwordReset!)),
                   child: const Text(
                     'Forgot password?',
                   ),
@@ -172,7 +227,17 @@ class _SignInViewState extends State<SignInView> {
                   TextButton(
                     onPressed: isLoading
                         ? null
-                        : () => context.push(AppRoutes.createAccount),
+                        : () => context.push(Uri(
+                                path: AppRoutes.createAccount,
+                                queryParameters: {
+                                  if (GoRouterState.of(context)
+                                          .uri
+                                          .queryParameters['from'] !=
+                                      null)
+                                    'from': GoRouterState.of(context)
+                                        .uri
+                                        .queryParameters['from']!
+                                }).toString()),
                     child: const Text(
                       'Create one',
                     ),

@@ -1,15 +1,38 @@
+import '../../features/home/domain/repositories/quick_status_repository.dart';
+import '../../features/home/domain/entities/quick_status.dart';
+import '../../features/home/data/repositories/preferences_quick_status_repository.dart';
+import '../../features/home/presentation/widgets/quick_status_sheet.dart';
+import '../../shared/widgets/parch_visuals.dart';
+import '../../features/activities/presentation/views/suggested_times_view.dart';
+import 'dart:async';
+import '../../features/profile/presentation/widgets/presence_settings_sheets.dart';
+import '../../features/profile/presentation/widgets/profile_sheets.dart';
+import '../../features/profile/domain/repositories/presence_repository.dart';
+import '../../features/activities/domain/entities/planning_context.dart';
+import '../../features/activities/presentation/views/activity_result_view.dart';
+import '../../features/activities/presentation/views/activity_invitation_view.dart';
+import '../../features/activities/presentation/view_models/activity_invitation_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../router/app_routes.dart';
 import '../../features/activities/presentation/view_models/activity_editor_view_model.dart';
 import '../../features/activities/presentation/widgets/activity_form.dart';
 import '../../features/activities/data/data_sources/firebase_activity_data_source.dart';
+import '../../features/activities/data/data_sources/google_places_source.dart';
+import '../../features/activities/domain/repositories/places_source.dart';
 import '../../features/activities/data/repositories/firebase_study_sessions_repository.dart';
 import '../../features/activities/domain/repositories/activity_catalog.dart';
-import '../../features/activities/domain/use_cases/get_activities.dart';
+import '../../features/home/presentation/view_models/home_view_model.dart';
+import '../../features/groups/domain/repositories/active_groups_repository.dart';
+import '../../features/groups/data/repositories/firebase_active_groups_repository.dart';
+import '../../features/groups/data/data_sources/firestore_groups_data_source.dart';
+import '../../features/alerts/domain/repositories/alerts_repository.dart';
+import '../../features/alerts/data/repositories/firebase_alerts_repository.dart';
 import '../../features/activities/presentation/view_models/activity_list_view_model.dart';
 import '../../features/home/presentation/views/home_view.dart';
 import 'firebase_dependencies.dart';
+import '../../features/profile/domain/repositories/profile_repository.dart';
+import '../../features/profile/data/repositories/firebase_profile_repository.dart';
 import '../../features/activities/data/repositories/mock_study_sessions_repository.dart';
 import '../../features/activities/domain/repositories/study_sessions_repository.dart';
 import '../../features/activities/domain/use_cases/manage_study_session.dart';
@@ -18,11 +41,27 @@ import '../../features/activities/presentation/view_models/study_session_view_mo
 import '../../features/activities/presentation/views/study_session_view.dart';
 
 class ActivitiesDependencies {
+  final PlacesSource places;
   final StudySessionsRepository repository;
   final bool isDemo;
   final ActivityCatalog? catalog;
+  final ProfileRepository? profiles;
+  final ActiveGroupsRepository? groups;
+  final AlertsRepository? alerts;
+  final String? Function()? currentUserId;
+  final String Function()? currentName;
+  final QuickStatusRepository? quickStatuses;
   const ActivitiesDependencies(
-      {required this.repository, this.isDemo = false, this.catalog});
+      {required this.repository,
+      this.places = const GooglePlacesSource(),
+      this.isDemo = false,
+      this.catalog,
+      this.profiles,
+      this.groups,
+      this.alerts,
+      this.currentUserId,
+      this.currentName,
+      this.quickStatuses});
   factory ActivitiesDependencies.mock() => ActivitiesDependencies(
       repository: MockStudySessionsRepository(), isDemo: true);
   factory ActivitiesDependencies.firebase(FirebaseDependencies firebase) {
@@ -30,11 +69,30 @@ class ActivitiesDependencies {
         FirebaseActivityDataSource(
             functions: firebase.functions,
             auth: firebase.auth,
-            firestore: firebase.firestore));
-    return ActivitiesDependencies(repository: repository, catalog: repository);
+            firestore: firebase.firestore,
+            api: firebase.mobile,
+            monitorFactory: firebase.creationMonitor,
+            offline: () =>
+                firebase.mobile.value.offline || firebase.mobile.value.forced));
+    return ActivitiesDependencies(
+        repository: repository,
+        catalog: repository,
+        profiles: FirebaseProfileRepository(firebase.mobile),
+        groups: FirebaseActiveGroupsRepository(FirestoreGroupsDataSource(
+            firebase.firestore, firebase.auth, api: firebase.mobile)),
+        alerts: FirebaseAlertsRepository(firebase.mobile,
+            currentUserId: () => firebase.auth.currentUser?.uid),
+        quickStatuses: PreferencesQuickStatusRepository(
+            firebase.auth.app.options.projectId),
+        currentUserId: () => firebase.auth.currentUser?.uid,
+        currentName: () =>
+            firebase.auth.currentUser?.displayName ??
+            firebase.auth.currentUser?.email ??
+            'there');
   }
   StudySessionViewModel createViewModel(String id) =>
       StudySessionViewModel(ManageStudySession(repository), id,
+          places: places,
           recommendations: GetRecommendedSlots(repository),
           autoLoadRecommendations: isDemo,
           refreshAfterDecision: !isDemo);
@@ -44,18 +102,57 @@ class ActivitiesDependencies {
           ? HomeView(
               activityState: ActivityListState(
                   loading: false, error: 'Activity discovery is unavailable.'))
-          : _HomeEntry(catalog: catalog!);
+          : _HomeEntry(
+              catalog: catalog!,
+              profiles: profiles,
+              groups: groups,
+              alerts: alerts,
+              currentUserId: currentUserId,
+              currentName: currentName,
+              quickStatuses: quickStatuses);
   Widget route(String id) =>
       _SessionEntry(key: ValueKey(id), dependencies: this, id: id);
-  Widget createRoute({String date = '', String time = ''}) =>
-      _CreateActivityEntry(repository: repository, date: date, time: time);
+  Widget resultRoute(String id, {bool acknowledged = false}) =>
+      ActivityResultView(
+          activityId: id, repository: repository, acknowledged: acknowledged);
+  Widget suggestedTimesRoute(String id) =>
+      SuggestedTimesView(key: ValueKey(id), viewModel: createViewModel(id));
+  Widget scheduleHeader(String id) => ActivityResultView(
+      activityId: id, repository: repository, scheduleCard: true);
+  Widget invitationRoute(String id) => ActivityInvitationView(
+      viewModel: ActivityInvitationViewModel(
+          activityId: id, sessions: repository, alerts: alerts));
+  Widget createRoute(
+          {String date = '',
+          String time = '',
+          String? groupId,
+          CreationComparison? comparison,
+          PlanningContext? planning}) =>
+      _CreateActivityEntry(
+          repository: repository,
+          places: places,
+          date: date,
+          time: time,
+          planning: planning,
+          comparison: comparison,
+          groupId: groupId);
 }
 
 class _CreateActivityEntry extends StatefulWidget {
+  final PlacesSource places;
   final StudySessionsRepository repository;
   final String date, time;
+  final String? groupId;
+  final PlanningContext? planning;
+  final CreationComparison? comparison;
   const _CreateActivityEntry(
-      {required this.repository, required this.date, required this.time});
+      {required this.repository,
+      required this.places,
+      required this.date,
+      required this.time,
+      this.planning,
+      this.comparison,
+      this.groupId});
   @override
   State<_CreateActivityEntry> createState() => _CreateActivityEntryState();
 }
@@ -63,12 +160,16 @@ class _CreateActivityEntry extends StatefulWidget {
 class _CreateActivityEntryState extends State<_CreateActivityEntry> {
   late final model = ActivityEditorViewModel(
       ManageStudySession(widget.repository),
+      places: widget.places,
       requestedDate: widget.date,
-      requestedTime: widget.time);
+      requestedTime: widget.time,
+      planning: widget.planning,
+      comparison: widget.comparison,
+      requestedGroupId: widget.groupId);
   @override
   Widget build(BuildContext context) => Scaffold(
       appBar: AppBar(
-          title: const Text('ParchApp'),
+          title: const ParchBrand(),
           leading: IconButton(
               tooltip: 'Back',
               icon: const Icon(Icons.arrow_back),
@@ -86,8 +187,8 @@ class _CreateActivityEntryState extends State<_CreateActivityEntry> {
                   constraints: const BoxConstraints(maxWidth: 600),
                   child: ActivityForm(
                       viewModel: model,
-                      onSaved: (id) =>
-                          context.go(AppRoutes.studySession(id)))))));
+                      onSaved: (id) => context.go(AppRoutes.activityResult(id),
+                          extra: id))))));
   @override
   void dispose() {
     model.dispose();
@@ -97,22 +198,130 @@ class _CreateActivityEntryState extends State<_CreateActivityEntry> {
 
 class _HomeEntry extends StatefulWidget {
   final ActivityCatalog catalog;
-  const _HomeEntry({required this.catalog});
+  final ProfileRepository? profiles;
+  final ActiveGroupsRepository? groups;
+  final AlertsRepository? alerts;
+  final String? Function()? currentUserId;
+  final String Function()? currentName;
+  final QuickStatusRepository? quickStatuses;
+  const _HomeEntry(
+      {required this.catalog,
+      this.profiles,
+      this.groups,
+      this.alerts,
+      this.currentUserId,
+      this.currentName,
+      this.quickStatuses});
   @override
   State<_HomeEntry> createState() => _HomeEntryState();
 }
 
-class _HomeEntryState extends State<_HomeEntry> {
-  late final model = ActivityListViewModel(GetActivities(widget.catalog))
+class _HomeEntryState extends State<_HomeEntry> with WidgetsBindingObserver {
+  Timer? _expiryTimer;
+  QuickStatus _quickStatus = const QuickStatus();
+  String? _quickOwner;
+  Future<void> _loadQuickStatus() async {
+    final uid = widget.currentUserId?.call();
+    if (uid == null || widget.quickStatuses == null) return;
+    try {
+      final saved = await widget.quickStatuses!.load(uid);
+      if (mounted && widget.currentUserId?.call() == uid) {
+        setState(() {
+          _quickStatus = saved;
+          _quickOwner = uid;
+        });
+      }
+    } catch (_) {
+      /* Keep the editor available for retry after a read failure. */
+    }
+  }
+
+  Future<void> _refresh() async {
+    await Future.wait([model.load(), _loadQuickStatus()]);
+  }
+
+  Future<void> _editQuickStatus() async {
+    final uid = widget.currentUserId?.call();
+    if (uid == null || widget.quickStatuses == null) return;
+    await showProfileSheet<bool>(context,
+        child: QuickStatusSheet(
+            initial: _quickOwner == uid ? _quickStatus : const QuickStatus(),
+            onSave: (free, next) async {
+              if (widget.currentUserId?.call() != uid) {
+                throw StateError('Session changed.');
+              }
+              final saved = await widget.quickStatuses!.save(uid, free, next);
+              if (!mounted || widget.currentUserId?.call() != uid) {
+                throw StateError('Session changed.');
+              }
+              setState(() {
+                _quickStatus = saved;
+                _quickOwner = uid;
+              });
+            }));
+  }
+
+  late final model = HomeViewModel(
+      catalog: widget.catalog,
+      groups: widget.groups,
+      alerts: widget.alerts,
+      profiles: widget.profiles,
+      currentUserId: widget.currentUserId)
     ..load();
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<ActivityListState>(
-          valueListenable: model,
-          builder: (context, state, _) =>
-              HomeView(activityState: state, onRefreshActivities: model.load));
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_loadQuickStatus());
+    _expiryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<HomeState>(
+      valueListenable: model,
+      builder: (context, state, _) => HomeView(
+          activityState: state.activities,
+          groupsState: state.groups,
+          alertsState: state.alerts,
+          profile: state.profile.user,
+          profileLoading: state.profile.isLoading,
+          profileError: state.profile.error,
+          onRefreshActivities: _refresh,
+          quickStatus: _quickOwner == state.profile.user?.id
+              ? _quickStatus
+              : const QuickStatus(),
+          onEditQuickStatus:
+              state.profile.user == null || widget.quickStatuses == null
+                  ? null
+                  : _editQuickStatus,
+          onManageStatus: state.profile.user == null
+              ? null
+              : () async {
+                  final repository = widget.profiles;
+                  if (repository is! PresenceRepository) return;
+                  await showProfileSheet<bool>(context,
+                      child: PresenceSheet(
+                          user: state.profile.user!,
+                          onSave: (status, expires, visibility) async {
+                            await (repository as PresenceRepository)
+                                .updatePresence(status, expires, visibility,
+                                    ownerId: state.profile.user!.id);
+                            await model.load();
+                            return true;
+                          }));
+                },
+          userName: widget.currentName?.call() ?? 'there'));
   @override
   void dispose() {
+    _expiryTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     model.dispose();
     super.dispose();
   }

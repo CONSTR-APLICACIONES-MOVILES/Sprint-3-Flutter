@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/active_group.dart';
 import '../../domain/entities/response_time_estimate.dart';
+import '../../domain/entities/weather_forecast.dart';
 
 class ActiveGroupCard extends StatelessWidget {
   final ActiveGroup group;
 
   final ResponseTimeEstimate? estimate;
+  final WeatherForecast? weather;
   final bool busy;
   final void Function(GroupAction action) onAction;
 
@@ -14,6 +16,7 @@ class ActiveGroupCard extends StatelessWidget {
     super.key,
     required this.group,
     this.estimate,
+    this.weather,
     required this.busy,
     required this.onAction,
   });
@@ -104,7 +107,10 @@ class ActiveGroupCard extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 11, color: AppColors.textSecondary)),
                 ),
-                Text('${group.progressCurrent} of ${group.progressTotal} needed',
+                Text(
+                    group.activityAttendance
+                        ? '${group.progressCurrent} of ${group.progressTotal} accepted'
+                        : '${group.progressCurrent} of ${group.progressTotal} needed',
                     style: const TextStyle(
                         fontSize: 11, color: AppColors.textSecondary)),
               ]),
@@ -115,12 +121,13 @@ class ActiveGroupCard extends StatelessWidget {
                   value: group.progressValue,
                   minHeight: 7,
                   backgroundColor: const Color(0xFFE8EDF6),
-                  valueColor:
-                      const AlwaysStoppedAnimation(AppColors.warning),
+                  valueColor: const AlwaysStoppedAnimation(AppColors.warning),
                 ),
               ),
-              if (estimate != null) _ResponseTimeHint(group, estimate!),
+              if (estimate != null && !group.activityAttendance)
+                _ResponseTimeHint(group, estimate!),
             ],
+            if (weather != null) _WeatherHint(weather!),
             const SizedBox(height: 14),
             Row(children: [
               Expanded(child: _actionButton(group.primaryAction, true)),
@@ -132,7 +139,9 @@ class ActiveGroupCard extends StatelessWidget {
       );
 
   Widget _actionButton(GroupAction action, bool primary) {
-    final label = _actionLabel(action);
+    final label = action == GroupAction.voteRsvp && group.activityAttendance
+        ? 'View invitation'
+        : _actionLabel(action);
     final icon = _actionIcon(action);
     if (primary) {
       return FilledButton.icon(
@@ -217,6 +226,7 @@ class ActiveGroupCard extends StatelessWidget {
 String _actionLabel(GroupAction action) => switch (action) {
       GroupAction.openChat => 'Open Chat',
       GroupAction.viewSchedule => 'View Schedule',
+      GroupAction.viewDetails => 'View group',
       GroupAction.roommateSync => 'Roommate Sync',
       GroupAction.viewNotes => 'View Notes',
       GroupAction.voteRsvp => 'Vote RSVP',
@@ -228,6 +238,7 @@ String _actionLabel(GroupAction action) => switch (action) {
 IconData _actionIcon(GroupAction action) => switch (action) {
       GroupAction.openChat => Icons.chat_bubble_outline,
       GroupAction.viewSchedule => Icons.schedule,
+      GroupAction.viewDetails => Icons.groups_outlined,
       GroupAction.roommateSync => Icons.sync_alt,
       GroupAction.viewNotes => Icons.description_outlined,
       GroupAction.voteRsvp => Icons.check,
@@ -235,6 +246,7 @@ IconData _actionIcon(GroupAction action) => switch (action) {
       GroupAction.dropIn => Icons.location_on_outlined,
       GroupAction.chat => Icons.chat_bubble_outline,
     };
+
 class _ResponseTimeHint extends StatelessWidget {
   final ActiveGroup group;
   final ResponseTimeEstimate estimate;
@@ -285,4 +297,44 @@ class _ResponseTimeHint extends StatelessWidget {
       ]),
     );
   }
+}
+
+class _WeatherHint extends StatelessWidget {
+  final WeatherForecast forecast;
+  const _WeatherHint(this.forecast);
+
+  @override
+  Widget build(BuildContext context) {
+    final rain = forecast.rainLikely;
+    return Container(
+      key: const ValueKey('activity-weather'),
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+          color: rain ? const Color(0xFFFEF6E7) : const Color(0xFFEEF4FF),
+          borderRadius: BorderRadius.circular(11)),
+      child: Row(children: [
+        Icon(_icon,
+            size: 16, color: rain ? AppColors.warning : AppColors.primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+              rain
+                  ? '${forecast.label} at the activity time. Consider a backup plan'
+                  : '${forecast.label} at the activity time',
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: rain ? const Color(0xFF92400E) : AppColors.primary)),
+        ),
+      ]),
+    );
+  }
+
+  IconData get _icon => switch (forecast.weatherCode) {
+        0 => Icons.wb_sunny_outlined,
+        >= 95 => Icons.thunderstorm_outlined,
+        _ when forecast.rainLikely => Icons.umbrella_outlined,
+        _ => Icons.cloud_outlined,
+      };
 }

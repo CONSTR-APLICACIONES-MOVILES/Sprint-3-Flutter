@@ -5,6 +5,7 @@ enum GroupTone { info, success, warning, casual }
 enum GroupAction {
   openChat,
   viewSchedule,
+  viewDetails,
   roommateSync,
   viewNotes,
   voteRsvp,
@@ -32,6 +33,12 @@ class ActiveGroup {
 
   final String? invitationId;
   final DateTime? invitationSentAt;
+  final bool hasResponded;
+  final bool activityAttendance;
+
+  final DateTime? activityStartsAt;
+  final double? activityLatitude;
+  final double? activityLongitude;
 
   const ActiveGroup({
     required this.id,
@@ -51,6 +58,11 @@ class ActiveGroup {
     this.progressTotal,
     this.invitationId,
     this.invitationSentAt,
+    this.hasResponded = false,
+    this.activityAttendance = false,
+    this.activityStartsAt,
+    this.activityLatitude,
+    this.activityLongitude,
   });
 
   ActiveGroup copyWith({
@@ -80,6 +92,11 @@ class ActiveGroup {
         secondaryAction: secondaryAction,
         invitationId: invitationId ?? this.invitationId,
         invitationSentAt: invitationSentAt ?? this.invitationSentAt,
+        hasResponded: hasResponded,
+        activityAttendance: activityAttendance,
+        activityStartsAt: activityStartsAt,
+        activityLatitude: activityLatitude,
+        activityLongitude: activityLongitude,
       );
 
   bool get hasInvitation => invitationId != null && invitationSentAt != null;

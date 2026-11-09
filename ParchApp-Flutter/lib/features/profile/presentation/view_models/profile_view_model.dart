@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
-import '../../domain/entities/photo_source.dart';
+import '../../domain/entities/profile_load_failure.dart';
+import '../../domain/entities/profile_preferences.dart';
 import '../../domain/entities/profile_user.dart';
 import '../../domain/use_cases/change_profile_photo.dart';
 import '../../domain/use_cases/manage_profile.dart';
@@ -42,13 +43,30 @@ class ProfileViewModel extends ValueNotifier<ProfileState> {
     try {
       final user = await _profile.load();
       _emit(value.copyWith(user: user, isLoading: false));
-    } catch (_) {
+    } catch (error, stack) {
+      assert(() {
+        debugPrint('Profile load failed: ${error.runtimeType}');
+        debugPrintStack(stackTrace: stack);
+        return true;
+      }());
       _emit(value.copyWith(
           isLoading: false,
-          error: 'Unable to load your profile. Please try again.'));
+          error: error is ProfileLoadFailure
+              ? error.message
+              : 'Unable to load your profile. Please try again.'));
     }
   }
 
+  Future<bool> setPresence(
+          AvailabilityStatus status, DateTime expiresAt, String visibility,
+          {String? ownerId}) =>
+      _update(() => _profile.presence(
+          status, expiresAt, visibility, ownerId ?? value.user!.id));
+  Future<bool> setPreferences(ProfilePreferences preferences,
+          {String? ownerId}) =>
+      _update(
+          () => _profile.preferences(preferences, ownerId ?? value.user!.id));
+  Future<List<Map<String, dynamic>>> getPeers() => _profile.peers();
   Future<bool> changeStatus(AvailabilityStatus status) {
     final user = value.user;
     if (user == null) return Future.value(false);
@@ -58,7 +76,7 @@ class ProfileViewModel extends ValueNotifier<ProfileState> {
   Future<bool> updateProfile(ProfileUser user) =>
       _update(() => _profile.updateProfile(user));
 
-  Future<bool> changePhoto(PhotoSource source) async {
+  Future<bool> changePhoto() async {
     final user = value.user;
     final changePhoto = _changePhoto;
     if (_disposed ||
@@ -70,7 +88,7 @@ class ProfileViewModel extends ValueNotifier<ProfileState> {
     }
     _emit(value.copyWith(isUpdating: true));
     try {
-      final updated = await changePhoto(user, source);
+      final updated = await changePhoto(user);
       if (_disposed) return false;
       _emit(value.copyWith(user: updated, isUpdating: false));
       return updated != null;
@@ -78,7 +96,7 @@ class ProfileViewModel extends ValueNotifier<ProfileState> {
       _emit(value.copyWith(
           isUpdating: false,
           error:
-              'We could not open the camera. Check the camera permission and try again.'));
+              'Unable to save your photo. Check camera permission, image size and connection, then try again.'));
       return false;
     }
   }
