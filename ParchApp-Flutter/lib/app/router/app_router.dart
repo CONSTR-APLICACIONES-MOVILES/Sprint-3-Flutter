@@ -133,6 +133,11 @@ abstract final class AppRouter {
             builder: (context, state) => groupsDependencies.activeGroupsRoute(),
           ),
           GoRoute(
+            path: AppRoutes.andesEvents,
+            builder: (context, state) =>
+                scheduleDependencies.andesEventsRoute(),
+          ),
+          GoRoute(
             path: AppRoutes.schedule,
             builder: (context, state) => scheduleDependencies.route(
                 groupId: state.uri.queryParameters['groupId'],

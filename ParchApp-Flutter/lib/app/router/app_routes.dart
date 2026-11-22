@@ -5,6 +5,7 @@ abstract final class AppRoutes {
   static const String authComplete = '/auth/complete';
   static const String home = '/home';
   static const String schedule = '/schedule';
+  static const String andesEvents = '/schedule/andes-events';
   static const String groups = '/groups';
   static const String alerts = '/alerts';
   static const String profile = '/profile';

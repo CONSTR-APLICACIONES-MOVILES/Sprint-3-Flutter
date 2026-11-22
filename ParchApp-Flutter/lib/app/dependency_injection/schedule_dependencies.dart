@@ -1,5 +1,9 @@
+import '../../features/andes_events/data/repositories/sqlite_andes_events_cache.dart';
+import '../../features/andes_events/data/repositories/sqlite_saved_andes_events_repository.dart';
+import '../../features/andes_events/data/repositories/firebase_andes_events_repository.dart';
+import '../../features/andes_events/presentation/view_models/andes_events_view_model.dart';
+import '../../features/andes_events/presentation/views/andes_events_view.dart';
 import '../../core/connectivity/connectivity_service.dart';
-import '../../features/schedule/data/repositories/firestore_friend_locations_repository.dart';
 import '../../features/schedule/data/repositories/geolocator_location_repository.dart';
 import '../../features/schedule/data/repositories/local_schedule_preferences_repository.dart';
 import '../../features/schedule/data/repositories/local_schedule_cache_metadata_repository.dart';
@@ -9,7 +13,7 @@ import '../../features/schedule/domain/services/distance_service.dart';
 import 'package:flutter/material.dart';
 import 'firebase_dependencies.dart';
 import '../../features/schedule/data/repositories/firebase_schedule_repository.dart';
-import '../../features/schedule/data/data_sources/google_free_busy_data_source.dart';
+import '../../features/schedule/data/data_sources/google_calendar_api_data_source.dart';
 
 import '../../features/schedule/data/adapters/google_calendar_adapter.dart';
 import '../../features/schedule/data/data_sources/google_calendar_auth_data_source.dart';
@@ -68,12 +72,11 @@ class ScheduleDependencies {
         defaultValue: true,
       ),
       repository: FirebaseScheduleRepository(
-      firestore: firebase.firestore,
-      auth: firebase.auth,
-    ),
+        firestore: firebase.firestore,
+        auth: firebase.auth,
+      ),
       calendarImportRepository: CalendarImportRepositoryImpl(
-          dataSource:
-              GoogleFreeBusyDataSource(headers: auth.authorizationHeaders),
+          dataSource: GoogleCalendarApiDataSource(authDataSource: auth),
           authDataSource: auth,
           adapter: const GoogleCalendarAdapter()),
     );
@@ -84,9 +87,7 @@ class ScheduleDependencies {
       ManageSchedule(
         repository,
         const AvailabilityService(),
-        firebase == null
-            ? null
-            : const GeolocatorLocationRepository(),
+        firebase == null ? null : const GeolocatorLocationRepository(),
         const DistanceService(),
       ),
       ImportGoogleCalendar(
@@ -112,6 +113,35 @@ class ScheduleDependencies {
       authorizeGoogleCalendar:
           AuthorizeGoogleCalendar(calendarImportRepository),
     );
+  }
+
+  Stream<bool> _connectionChanges(ConnectivityService service) async* {
+    yield await service.hasConnection();
+    yield* service.connectionChanges;
+  }
+
+  Widget andesEventsRoute() {
+    final configured = firebase;
+    if (configured == null) {
+      return const Scaffold(
+          body: Center(child: Text('Andes Events requires Firebase.')));
+    }
+    final connectivity = ConnectivityService();
+    return AndesEventsView(
+        viewModel: AndesEventsViewModel(
+            FirebaseAndesEventsRepository(
+                configured.firestore, configured.auth),
+            outbox: configured.scheduleOutbox,
+            cache: SqliteAndesEventsCache(namespace: configured.firestore.app.options.projectId),
+            connectivityChanges: _connectionChanges(connectivity),
+            savedRepository: SqliteSavedAndesEventsRepository(),
+            userId: configured.auth.currentUser == null
+                ? null
+                : '${configured.firestore.app.options.projectId}:${configured.auth.currentUser!.uid}',
+            accountChanges: configured.auth.authStateChanges().map((user) =>
+                user == null
+                    ? null
+                    : '${configured.firestore.app.options.projectId}:${user.uid}')));
   }
 
   Widget route(
@@ -144,6 +174,7 @@ class _ScheduleEntry extends StatefulWidget {
 
 class _ScheduleEntryState extends State<_ScheduleEntry> {
   late final ScheduleViewModel _viewModel;
+  Set<String> _confirmedOutbox = {};
 
   @override
   void initState() {
@@ -151,10 +182,22 @@ class _ScheduleEntryState extends State<_ScheduleEntry> {
 
     _viewModel = widget.dependencies.createViewModel(
         initialDay: widget.initialDay, groupId: widget.groupId);
+    final outbox = widget.dependencies.firebase?.scheduleOutbox;
+    _confirmedOutbox = outbox?.operations.values.where((o) => o.status == 'confirmed').map((o) => '${o.userId}:${o.event.id}').toSet() ?? {};
+    outbox?.addListener(_onOutboxChanged);
+  }
+
+  void _onOutboxChanged() {
+    final outbox = widget.dependencies.firebase?.scheduleOutbox;
+    if (outbox == null) return;
+    final confirmed = outbox.operations.values.where((o) => o.status == 'confirmed').map((o) => '${o.userId}:${o.event.id}').toSet();
+    if (confirmed.difference(_confirmedOutbox).isNotEmpty) _viewModel.refreshSchedule();
+    _confirmedOutbox = confirmed;
   }
 
   @override
   void dispose() {
+    widget.dependencies.firebase?.scheduleOutbox.removeListener(_onOutboxChanged);
     _viewModel.dispose();
     super.dispose();
   }

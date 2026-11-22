@@ -1,6 +1,7 @@
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:googleapis/calendar/v3.dart' as google_calendar;
+import 'package:http/http.dart' as http;
 
 import '../models/google_calendar_event_model.dart';
 import 'google_calendar_auth_data_source.dart';
@@ -8,18 +9,18 @@ import 'google_calendar_data_source.dart';
 
 class GoogleCalendarApiDataSource implements GoogleCalendarDataSource {
   final GoogleCalendarAuthDataSource authDataSource;
+  final Future<http.Client> Function()? createAuthorizedClient;
+  final DateTime Function()? now;
 
   const GoogleCalendarApiDataSource({
     required this.authDataSource,
+    this.createAuthorizedClient,
+    this.now,
   });
 
   @override
   Future<List<GoogleCalendarEventModel>> importEvents() async {
-    final authorization = await authDataSource.getCalendarAuthorization();
-
-    final client = authorization.authClient(
-      scopes: GoogleCalendarAuthDataSource.calendarScopes,
-    );
+    final client = await _authorizedClient();
 
     try {
       final calendarApi = google_calendar.CalendarApi(client);
@@ -28,9 +29,13 @@ class GoogleCalendarApiDataSource implements GoogleCalendarDataSource {
 
       String? pageToken;
 
-      final timeMin = DateTime(2026, 1, 1).toUtc();
-
-      final timeMax = DateTime(2027, 1, 1).toUtc();
+      final today = (now ?? DateTime.now)().toUtc().subtract(
+            const Duration(hours: 5),
+          );
+      final startOfToday = DateTime.utc(today.year, today.month, today.day, 5);
+      // Keep history available when navigating to previous schedule days.
+      final timeMin = DateTime.utc(today.year - 1, today.month, today.day, 5);
+      final timeMax = startOfToday.add(const Duration(days: 56));
 
       do {
         final response = await calendarApi.events.list(
@@ -42,6 +47,7 @@ class GoogleCalendarApiDataSource implements GoogleCalendarDataSource {
           showDeleted: false,
           maxResults: 2500,
           pageToken: pageToken,
+          timeZone: 'America/Bogota',
         );
 
         final events = response.items ?? const <google_calendar.Event>[];
@@ -49,15 +55,6 @@ class GoogleCalendarApiDataSource implements GoogleCalendarDataSource {
         debugPrint(
           'GOOGLE API REAL: ${events.length} events received',
         );
-
-        for (final event in events.take(10)) {
-          debugPrint(
-            'GOOGLE EVENT -> '
-            'id=${event.id} | '
-            'title=${event.summary} | '
-            'start=${event.start?.dateTime ?? event.start?.date}',
-          );
-        }
 
         for (final event in events) {
           final converted = _toModel(event);
@@ -89,10 +86,24 @@ class GoogleCalendarApiDataSource implements GoogleCalendarDataSource {
     }
   }
 
+  Future<http.Client> _authorizedClient() async {
+    final factory = createAuthorizedClient;
+    if (factory != null) return factory();
+    final authorization = await authDataSource.getCalendarAuthorization();
+    return authorization.authClient(
+      scopes: GoogleCalendarAuthDataSource.calendarScopes,
+    );
+  }
+
   GoogleCalendarEventModel? _toModel(
     google_calendar.Event event,
   ) {
-    if (event.status == 'cancelled') {
+    if (event.status == 'cancelled' ||
+        event.transparency == 'transparent' ||
+        (event.attendees ?? const <google_calendar.EventAttendee>[]).any(
+            (attendee) =>
+                attendee.self == true &&
+                attendee.responseStatus == 'declined')) {
       return null;
     }
 
@@ -102,9 +113,9 @@ class GoogleCalendarApiDataSource implements GoogleCalendarDataSource {
       return null;
     }
 
-    final start = event.start?.dateTime ?? event.start?.date;
-
-    final end = event.end?.dateTime ?? event.end?.date;
+    // Date-only events occupy the full day in the schedule's Bogota timezone.
+    final start = _eventTime(event.start);
+    final end = _eventTime(event.end);
 
     if (start == null || end == null) {
       return null;
@@ -131,6 +142,14 @@ class GoogleCalendarApiDataSource implements GoogleCalendarDataSource {
       start: start.toLocal(),
       end: end.toLocal(),
     );
+  }
+
+  DateTime? _eventTime(google_calendar.EventDateTime? value) {
+    if (value?.dateTime != null) return value!.dateTime;
+    final date = value?.date;
+    return date == null
+        ? null
+        : DateTime.utc(date.year, date.month, date.day, 5);
   }
 
   String? _cleanOptionalText(

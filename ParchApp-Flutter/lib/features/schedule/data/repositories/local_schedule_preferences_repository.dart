@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // package for local storage
 
 import '../../domain/entities/schedule_preferences.dart';
 import '../../domain/repositories/schedule_preferences_repository.dart';

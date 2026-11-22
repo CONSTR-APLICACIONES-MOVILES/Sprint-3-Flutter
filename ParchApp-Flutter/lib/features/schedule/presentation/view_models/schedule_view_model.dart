@@ -38,7 +38,7 @@ class ScheduleViewModel extends ValueNotifier<ScheduleState> {
   final ConnectivityService _connectivityService;
 
   final ScheduleCacheMetadataRepository _cacheMetadataRepository;
-
+//subscription for internet connectivity changes
   StreamSubscription<bool>? _connectivitySubscription;
 
   bool _connectivityMonitoringStarted = false;
@@ -477,7 +477,7 @@ class ScheduleViewModel extends ValueNotifier<ScheduleState> {
   }
 
   // ===================================================================
-  // GOOGLE CALENDAR IMPORT
+  // GOOGLE CALENDAR IMPORT - sync/await 
   // ===================================================================
 
   Future<void> importGoogleCalendar() async {

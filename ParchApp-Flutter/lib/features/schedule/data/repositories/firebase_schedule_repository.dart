@@ -7,8 +7,7 @@ import '../../domain/entities/schedule_block.dart';
 import '../../domain/entities/schedule_friend.dart';
 import '../../domain/repositories/schedule_repository.dart';
 
-class FirebaseScheduleRepository
-    implements ScheduleRepository {
+class FirebaseScheduleRepository implements ScheduleRepository {
   final FirebaseFirestore firestore;
   final FirebaseAuth auth;
 
@@ -17,13 +16,10 @@ class FirebaseScheduleRepository
     required this.auth,
   });
 
-  // ===================================================================
-  // CURRENT USER
-  // ===================================================================
+  // CURRENT USER.
 
   User get _currentUser {
-    final user =
-        auth.currentUser;
+    final user = auth.currentUser;
 
     if (user == null) {
       throw StateError(
@@ -34,60 +30,39 @@ class FirebaseScheduleRepository
     return user;
   }
 
-  String get _uid =>
-      _currentUser.uid;
+  String get _uid => _currentUser.uid;
 
-  // ===================================================================
-  // FIRESTORE REFERENCES
-  // ===================================================================
+  DocumentReference<Map<String, dynamic>> get _scheduleDocument => firestore
+      .collection(
+        'schedules',
+      )
+      .doc(
+        _uid,
+      );
 
-  DocumentReference<
-          Map<String, dynamic>>
-      get _scheduleDocument =>
-          firestore
-              .collection(
-                'schedules',
-              )
-              .doc(
-                _uid,
-              );
+  CollectionReference<Map<String, dynamic>> get _slotsCollection =>
+      _scheduleDocument.collection(
+        'slots',
+      );
 
-  CollectionReference<
-          Map<String, dynamic>>
-      get _slotsCollection =>
-          _scheduleDocument
-              .collection(
-                'slots',
-              );
+  DocumentReference<Map<String, dynamic>> get _availabilityDocument => firestore
+      .collection(
+        'availability',
+      )
+      .doc(
+        _uid,
+      );
 
-  DocumentReference<
-          Map<String, dynamic>>
-      get _availabilityDocument =>
-          firestore
-              .collection(
-                'availability',
-              )
-              .doc(
-                _uid,
-              );
+  CollectionReference<Map<String, dynamic>> get _availabilitySlotsCollection =>
+      _availabilityDocument.collection(
+        'slots',
+      );
 
-  CollectionReference<
-          Map<String, dynamic>>
-      get _availabilitySlotsCollection =>
-          _availabilityDocument
-              .collection(
-                'slots',
-              );
-
-  // ===================================================================
   // FRIENDS
-  // ===================================================================
 
   @override
-  Future<List<ScheduleFriend>>
-      getFriends() async {
-    final currentUid =
-        _uid;
+  Future<List<ScheduleFriend>> getFriends() async {
+    final currentUid = _uid;
 
     debugPrint(
       'FRIENDS -> '
@@ -98,23 +73,21 @@ class FirebaseScheduleRepository
     // 1. Read accepted friendships.
     // -----------------------------------------------------------------
 
-    final friendshipSnapshot =
-        await firestore
-            .collection(
-              'users',
-            )
-            .doc(
-              currentUid,
-            )
-            .collection(
-              'friends',
-            )
-            .where(
-              'status',
-              isEqualTo:
-                  'accepted',
-            )
-            .get();
+    final friendshipSnapshot = await firestore
+        .collection(
+          'users',
+        )
+        .doc(
+          currentUid,
+        )
+        .collection(
+          'friends',
+        )
+        .where(
+          'status',
+          isEqualTo: 'accepted',
+        )
+        .get();
 
     debugPrint(
       'FRIENDS -> '
@@ -122,85 +95,39 @@ class FirebaseScheduleRepository
       'accepted relationships found',
     );
 
-    if (friendshipSnapshot
-        .docs
-        .isEmpty) {
+    if (friendshipSnapshot.docs.isEmpty) {
       return const [];
     }
 
-    final friends =
-        <ScheduleFriend>[];
+    final friends = <ScheduleFriend>[];
 
     // -----------------------------------------------------------------
     // 2. Load each friend's public profile.
-    //
-    // This part remains unchanged because our Sprint concurrency
-    // strategy specifically targets Compare Availability.
-    // -----------------------------------------------------------------
 
-    for (final friendshipDocument
-        in friendshipSnapshot.docs) {
-      final relationshipData =
-          friendshipDocument
-              .data();
+    for (final friendshipDocument in friendshipSnapshot.docs) {
+      final relationshipData = friendshipDocument.data();
 
-      final rawFriendId =
-          relationshipData[
-              'friendId'];
+      final rawFriendId = relationshipData['friendId'];
 
-      final friendId =
-          rawFriendId is String &&
-                  rawFriendId
-                      .trim()
-                      .isNotEmpty
-              ? rawFriendId.trim()
-              : friendshipDocument
-                  .id;
+      final friendId = rawFriendId is String && rawFriendId.trim().isNotEmpty
+          ? rawFriendId.trim()
+          : friendshipDocument.id;
 
       debugPrint(
         'FRIENDS -> '
         'Reading users/$friendId',
       );
 
-      final friendSnapshot =
-          await firestore
-              .collection(
-                'users',
-              )
-              .doc(
-                friendId,
-              )
-              .get();
-      debugPrint('========== MATEO DIAGNOSTIC ==========');
+      final friendSnapshot = await firestore
+          .collection(
+            'users',
+          )
+          .doc(
+            friendId,
+          )
+          .get();
 
-      debugPrint(
-        'PROJECT -> ${firestore.app.options.projectId}',
-      );
-
-      debugPrint(
-        'DATABASE -> ${firestore.databaseId}',
-      );
-
-      debugPrint(
-        'DOCUMENT PATH -> ${friendSnapshot.reference.path}',
-      );
-
-      debugPrint(
-        'EXISTS -> ${friendSnapshot.exists}',
-      );
-
-      debugPrint(
-        'FROM CACHE -> ${friendSnapshot.metadata.isFromCache}',
-      );
-
-      debugPrint(
-        'DATA -> ${friendSnapshot.data()}',
-      );
-
-      debugPrint('======================================');
-
-      if (!friendSnapshot
-          .exists) {
+      if (!friendSnapshot.exists) {
         debugPrint(
           'FRIENDS -> '
           'users/$friendId does not exist',
@@ -209,76 +136,50 @@ class FirebaseScheduleRepository
         continue;
       }
 
-      final data =
-          friendSnapshot
-              .data();
+      final data = friendSnapshot.data();
 
       if (data == null) {
         continue;
       }
 
-      final rawName =
-          data['name'];
+      final rawName = data['name'];
 
-      final rawFullName =
-          data['fullName'];
+      final rawFullName = data['fullName'];
 
-      final rawInitials =
-          data['initials'];
+      final rawInitials = data['initials'];
 
-      final name =
-          rawName is String
-              ? rawName.trim()
-              : '';
+      final name = rawName is String ? rawName.trim() : '';
 
-      final fullName =
-          rawFullName is String
-              ? rawFullName
-                  .trim()
-              : '';
+      final fullName = rawFullName is String ? rawFullName.trim() : '';
 
-      final initials =
-          rawInitials is String
-              ? rawInitials
-                  .trim()
-              : '';
+      final initials = rawInitials is String ? rawInitials.trim() : '';
 
-      final resolvedName =
-          name.isNotEmpty
-              ? name
-              : fullName
-                      .isNotEmpty
-                  ? fullName
-                      .split(
-                        RegExp(
-                          r'\s+',
-                        ),
-                      )
-                      .first
-                  : friendId;
-
-      final resolvedFullName =
-          fullName.isNotEmpty
+      final resolvedName = name.isNotEmpty
+          ? name
+          : fullName.isNotEmpty
               ? fullName
-              : resolvedName;
+                  .split(
+                    RegExp(
+                      r'\s+',
+                    ),
+                  )
+                  .first
+              : friendId;
 
-      final resolvedInitials =
-          initials.isNotEmpty
-              ? initials
-              : _initials(
-                  resolvedFullName,
-                );
+      final resolvedFullName = fullName.isNotEmpty ? fullName : resolvedName;
+
+      final resolvedInitials = initials.isNotEmpty
+          ? initials
+          : _initials(
+              resolvedFullName,
+            );
 
       friends.add(
         ScheduleFriend(
-          id:
-              friendId,
-          name:
-              resolvedName,
-          fullName:
-              resolvedFullName,
-          initials:
-              resolvedInitials,
+          id: friendId,
+          name: resolvedName,
+          fullName: resolvedFullName,
+          initials: resolvedInitials,
         ),
       );
     }
@@ -288,13 +189,9 @@ class FirebaseScheduleRepository
     // -----------------------------------------------------------------
 
     friends.sort(
-      (a, b) =>
-          a.fullName
-              .toLowerCase()
-              .compareTo(
-                b.fullName
-                    .toLowerCase(),
-              ),
+      (a, b) => a.fullName.toLowerCase().compareTo(
+            b.fullName.toLowerCase(),
+          ),
     );
 
     debugPrint(
@@ -302,8 +199,7 @@ class FirebaseScheduleRepository
       '${friends.length} friend profiles loaded',
     );
 
-    for (final friend
-        in friends) {
+    for (final friend in friends) {
       debugPrint(
         'FRIENDS -> '
         '${friend.id} | '
@@ -319,10 +215,8 @@ class FirebaseScheduleRepository
   // ===================================================================
 
   @override
-  Future<Map<String, UserLocation>>
-      getFriendLocations({
-    required List<String>
-        friendIds,
+  Future<Map<String, UserLocation>> getFriendLocations({
+    required List<String> friendIds,
   }) async {
     if (friendIds.isEmpty) {
       debugPrint(
@@ -338,25 +232,22 @@ class FirebaseScheduleRepository
       'Loading ${friendIds.length} locations',
     );
 
-    final result =
-        <String, UserLocation>{};
+    final result = <String, UserLocation>{};
 
-    for (final friendId
-        in friendIds) {
+    for (final friendId in friendIds) {
       debugPrint(
         'FRIEND LOCATIONS -> '
         'Reading locations/$friendId',
       );
 
-      final snapshot =
-          await firestore
-              .collection(
-                'locations',
-              )
-              .doc(
-                friendId,
-              )
-              .get();
+      final snapshot = await firestore
+          .collection(
+            'locations',
+          )
+          .doc(
+            friendId,
+          )
+          .get();
 
       if (!snapshot.exists) {
         debugPrint(
@@ -367,18 +258,15 @@ class FirebaseScheduleRepository
         continue;
       }
 
-      final data =
-          snapshot.data();
+      final data = snapshot.data();
 
       if (data == null) {
         continue;
       }
 
-      final rawLocation =
-          data['location'];
+      final rawLocation = data['location'];
 
-      if (rawLocation
-          is! GeoPoint) {
+      if (rawLocation is! GeoPoint) {
         debugPrint(
           'FRIEND LOCATIONS -> '
           '$friendId does not contain '
@@ -388,18 +276,12 @@ class FirebaseScheduleRepository
         continue;
       }
 
-      final location =
-          UserLocation(
-        latitude:
-            rawLocation
-                .latitude,
-        longitude:
-            rawLocation
-                .longitude,
+      final location = UserLocation(
+        latitude: rawLocation.latitude,
+        longitude: rawLocation.longitude,
       );
 
-      result[friendId] =
-          location;
+      result[friendId] = location;
 
       debugPrint(
         'FRIEND LOCATIONS -> '
@@ -422,12 +304,10 @@ class FirebaseScheduleRepository
   // ===================================================================
 
   @override
-  Future<List<ScheduleBlock>>
-      getMySchedule({
+  Future<List<ScheduleBlock>> getMySchedule({
     required DateTime day,
   }) async {
-    final dayKey =
-        _dayKey(
+    final dayKey = _dayKey(
       day,
     );
 
@@ -437,38 +317,28 @@ class FirebaseScheduleRepository
       'for $dayKey',
     );
 
-    final snapshot =
-        await _slotsCollection
-            .where(
-              'dayKey',
-              isEqualTo:
-                  dayKey,
-            )
-            .get();
+    final snapshot = await _slotsCollection
+        .where(
+          'dayKey',
+          isEqualTo: dayKey,
+        )
+        .get();
 
     debugPrint(
       'MY SCHEDULE -> '
       '${snapshot.docs.length} slots found',
     );
 
-    final blocks =
-        <ScheduleBlock>[];
+    final blocks = <ScheduleBlock>[];
 
-    for (final document
-        in snapshot.docs) {
-      final data =
-          document.data();
+    for (final document in snapshot.docs) {
+      final data = document.data();
 
-      final rawStart =
-          data['start'];
+      final rawStart = data['start'];
 
-      final rawEnd =
-          data['end'];
+      final rawEnd = data['end'];
 
-      if (rawStart
-              is! Timestamp ||
-          rawEnd
-              is! Timestamp) {
+      if (rawStart is! Timestamp || rawEnd is! Timestamp) {
         debugPrint(
           'MY SCHEDULE -> '
           'Skipping ${document.id}: '
@@ -478,15 +348,9 @@ class FirebaseScheduleRepository
         continue;
       }
 
-      final start =
-          rawStart
-              .toDate()
-              .toLocal();
+      final start = rawStart.toDate().toLocal();
 
-      final end =
-          rawEnd
-              .toDate()
-              .toLocal();
+      final end = rawEnd.toDate().toLocal();
 
       if (!end.isAfter(
         start,
@@ -500,58 +364,28 @@ class FirebaseScheduleRepository
         continue;
       }
 
-      final rawTitle =
-          data['title'];
+      final rawTitle = data['title'];
 
-      final rawDescription =
-          data[
-              'description'];
+      final rawDescription = data['description'];
 
-      final rawLocation =
-          data['location'];
+      final rawLocation = data['location'];
 
       blocks.add(
         ScheduleBlock(
-          id:
-              document.id,
-
-          start:
-              start,
-
-          end:
-              end,
-
-          type:
-              ScheduleBlockType
-                  .personalEvent,
-
-          title:
-              rawTitle
-                      is String
-                  ? rawTitle
-                  : null,
-
-          subtitle:
-              rawDescription
-                      is String
-                  ? rawDescription
-                  : null,
-
-          location:
-              rawLocation
-                      is String
-                  ? rawLocation
-                  : null,
-
-          ownerId:
-              _uid,
+          id: document.id,
+          start: start,
+          end: end,
+          type: ScheduleBlockType.personalEvent,
+          title: rawTitle is String ? rawTitle : null,
+          subtitle: rawDescription is String ? rawDescription : null,
+          location: rawLocation is String ? rawLocation : null,
+          ownerId: _uid,
         ),
       );
     }
 
     blocks.sort(
-      (a, b) =>
-          a.start.compareTo(
+      (a, b) => a.start.compareTo(
         b.start,
       ),
     );
@@ -564,11 +398,9 @@ class FirebaseScheduleRepository
   // ===================================================================
 
   @override
-  Future<List<ScheduleBlock>>
-      getFriendsBusyBlocks({
+  Future<List<ScheduleBlock>> getFriendsBusyBlocks({
     required DateTime day,
-    required List<String>
-        friendIds,
+    required List<String> friendIds,
   }) async {
     if (friendIds.isEmpty) {
       debugPrint(
@@ -579,8 +411,7 @@ class FirebaseScheduleRepository
       return const [];
     }
 
-    final dayKey =
-        _dayKey(
+    final dayKey = _dayKey(
       day,
     );
 
@@ -610,22 +441,16 @@ class FirebaseScheduleRepository
     // Every Firestore query starts before we await the group.
     // ---------------------------------------------------------------
 
-    final stopwatch =
-        Stopwatch()
-          ..start();
+    final stopwatch = Stopwatch()..start();
 
-    final requests =
-        friendIds
-            .map(
-      (friendId) =>
-          _loadFriendBusyBlocks(
-        friendId:
-            friendId,
-        dayKey:
-            dayKey,
-      ),
-    )
-            .toList();
+    final requests = friendIds
+        .map(
+          (friendId) => _loadFriendBusyBlocks(
+            friendId: friendId,
+            dayKey: dayKey,
+          ),
+        )
+        .toList();
 
     debugPrint(
       'FRIEND BUSY CONCURRENCY -> '
@@ -636,9 +461,7 @@ class FirebaseScheduleRepository
     // Wait for ALL friend queries.
     // ---------------------------------------------------------------
 
-    final results =
-        await Future.wait<
-            List<ScheduleBlock>>(
+    final results = await Future.wait<List<ScheduleBlock>>(
       requests,
     );
 
@@ -661,13 +484,11 @@ class FirebaseScheduleRepository
     // ]
     // ---------------------------------------------------------------
 
-    final blocks =
-        results
-            .expand(
-              (friendBlocks) =>
-                  friendBlocks,
-            )
-            .toList();
+    final blocks = results
+        .expand(
+          (friendBlocks) => friendBlocks,
+        )
+        .toList();
 
     // ---------------------------------------------------------------
     // Maintain deterministic ordering for the UI.
@@ -675,22 +496,16 @@ class FirebaseScheduleRepository
 
     blocks.sort(
       (a, b) {
-        final startComparison =
-            a.start
-                .compareTo(
+        final startComparison = a.start.compareTo(
           b.start,
         );
 
-        if (startComparison !=
-            0) {
+        if (startComparison != 0) {
           return startComparison;
         }
 
-        return (a.ownerId ??
-                '')
-            .compareTo(
-          b.ownerId ??
-              '',
+        return (a.ownerId ?? '').compareTo(
+          b.ownerId ?? '',
         );
       },
     );
@@ -715,8 +530,7 @@ class FirebaseScheduleRepository
   // LOAD ONE FRIEND'S BUSY BLOCKS
   // ===================================================================
 
-  Future<List<ScheduleBlock>>
-      _loadFriendBusyBlocks({
+  Future<List<ScheduleBlock>> _loadFriendBusyBlocks({
     required String friendId,
     required String dayKey,
   }) async {
@@ -749,23 +563,21 @@ class FirebaseScheduleRepository
     // - dayKey
     // ---------------------------------------------------------------
 
-    final snapshot =
-        await firestore
-            .collection(
-              'availability',
-            )
-            .doc(
-              friendId,
-            )
-            .collection(
-              'slots',
-            )
-            .where(
-              'dayKey',
-              isEqualTo:
-                  dayKey,
-            )
-            .get();
+    final snapshot = await firestore
+        .collection(
+          'availability',
+        )
+        .doc(
+          friendId,
+        )
+        .collection(
+          'slots',
+        )
+        .where(
+          'dayKey',
+          isEqualTo: dayKey,
+        )
+        .get();
 
     debugPrint(
       'FRIEND BUSY -> '
@@ -773,24 +585,16 @@ class FirebaseScheduleRepository
       '${snapshot.docs.length} busy slots',
     );
 
-    final blocks =
-        <ScheduleBlock>[];
+    final blocks = <ScheduleBlock>[];
 
-    for (final document
-        in snapshot.docs) {
-      final data =
-          document.data();
+    for (final document in snapshot.docs) {
+      final data = document.data();
 
-      final rawStart =
-          data['start'];
+      final rawStart = data['start'];
 
-      final rawEnd =
-          data['end'];
+      final rawEnd = data['end'];
 
-      if (rawStart
-              is! Timestamp ||
-          rawEnd
-              is! Timestamp) {
+      if (rawStart is! Timestamp || rawEnd is! Timestamp) {
         debugPrint(
           'FRIEND BUSY -> '
           'Skipping ${document.id}: '
@@ -800,15 +604,9 @@ class FirebaseScheduleRepository
         continue;
       }
 
-      final start =
-          rawStart
-              .toDate()
-              .toLocal();
+      final start = rawStart.toDate().toLocal();
 
-      final end =
-          rawEnd
-              .toDate()
-              .toLocal();
+      final end = rawEnd.toDate().toLocal();
 
       if (!end.isAfter(
         start,
@@ -824,34 +622,25 @@ class FirebaseScheduleRepository
 
       blocks.add(
         ScheduleBlock(
-          id:
-              '$friendId-${document.id}',
+          id: '$friendId-${document.id}',
 
-          start:
-              start,
+          start: start,
 
-          end:
-              end,
+          end: end,
 
-          type:
-              ScheduleBlockType
-                  .friendBusy,
+          type: ScheduleBlockType.friendBusy,
 
           // ---------------------------------------------------------
           // Privacy-safe representation.
           // ---------------------------------------------------------
 
-          title:
-              'Busy',
+          title: 'Busy',
 
-          subtitle:
-              null,
+          subtitle: null,
 
-          location:
-              null,
+          location: null,
 
-          ownerId:
-              friendId,
+          ownerId: friendId,
         ),
       );
     }
@@ -864,15 +653,12 @@ class FirebaseScheduleRepository
   // ===================================================================
 
   @override
-  Future<void>
-      replaceImportedCalendarBlocks(
+  Future<void> replaceImportedCalendarBlocks(
     List<ScheduleBlock> blocks,
   ) async {
-    final uid =
-        _uid;
+    final uid = _uid;
 
-    final now =
-        Timestamp.now();
+    final now = Timestamp.now();
 
     debugPrint(
       'FIRESTORE SAVE -> '
@@ -885,14 +671,12 @@ class FirebaseScheduleRepository
     // 1. DELETE PREVIOUS GOOGLE CALENDAR PRIVATE SLOTS
     // -----------------------------------------------------------------
 
-    final previousPrivate =
-        await _slotsCollection
-            .where(
-              'source',
-              isEqualTo:
-                  'google_calendar',
-            )
-            .get();
+    final previousPrivate = await _slotsCollection
+        .where(
+          'source',
+          isEqualTo: 'google_calendar',
+        )
+        .get();
 
     debugPrint(
       'FIRESTORE SAVE -> '
@@ -901,44 +685,22 @@ class FirebaseScheduleRepository
       'previous private Google slots',
     );
 
-    for (final document
-        in previousPrivate.docs) {
-      await document
-          .reference
-          .delete();
-    }
-
-    // -----------------------------------------------------------------
-    // 2. DELETE PREVIOUS SHARED AVAILABILITY
-    // -----------------------------------------------------------------
-
-    final previousAvailability =
-        await _availabilitySlotsCollection
-            .get();
-
-    debugPrint(
-      'FIRESTORE SAVE -> '
-      'Deleting '
-      '${previousAvailability.docs.length} '
-      'previous availability slots',
-    );
-
-    for (final document
-        in previousAvailability.docs) {
-      await document
-          .reference
-          .delete();
+    // Availability has no source field; the matching private document IDs
+    // identify exactly the Google-derived projections to remove.
+    for (final document in previousPrivate.docs) {
+      final batch = firestore.batch();
+      batch.delete(document.reference);
+      batch.delete(_availabilitySlotsCollection.doc(document.id));
+      await batch.commit();
     }
 
     // -----------------------------------------------------------------
     // 3. WRITE CURRENT GOOGLE CALENDAR
     // -----------------------------------------------------------------
 
-    var writtenCount =
-        0;
+    var writtenCount = 0;
 
-    for (final block
-        in blocks) {
+    for (final block in blocks) {
       if (!block.end.isAfter(
         block.start,
       )) {
@@ -951,64 +713,34 @@ class FirebaseScheduleRepository
         continue;
       }
 
-      final documentId =
-          _safeDocumentId(
+      final documentId = _safeDocumentId(
         block.id,
       );
 
-      final privateData =
-          <String, dynamic>{
-        'externalId':
-            _externalId(
+      final privateData = <String, dynamic>{
+        'externalId': _externalId(
           block.id,
         ),
-
-        'title':
-            block.title ??
-                '',
-
-        'start':
-            Timestamp.fromDate(
+        'title': block.title ?? '',
+        'start': Timestamp.fromDate(
           block.start,
         ),
-
-        'end':
-            Timestamp.fromDate(
+        'end': Timestamp.fromDate(
           block.end,
         ),
-
-        'dayKey':
-            _dayKey(
+        'dayKey': _dayKey(
           block.start,
         ),
-
-        'source':
-            'google_calendar',
-
-        'importedAt':
-            now,
+        'source': 'google_calendar',
+        'importedAt': now,
       };
 
-      if (block.subtitle !=
-              null &&
-          block.subtitle!
-              .trim()
-              .isNotEmpty) {
-        privateData[
-                'description'] =
-            block.subtitle!
-                .trim();
+      if (block.subtitle != null && block.subtitle!.trim().isNotEmpty) {
+        privateData['description'] = block.subtitle!.trim();
       }
 
-      if (block.location !=
-              null &&
-          block.location!
-              .trim()
-              .isNotEmpty) {
-        privateData[
-                'location'] =
-            block.location!
-                .trim();
+      if (block.location != null && block.location!.trim().isNotEmpty) {
+        privateData['location'] = block.location!.trim();
       }
 
       // ---------------------------------------------------------------
@@ -1029,22 +761,17 @@ class FirebaseScheduleRepository
 
       await _availabilitySlotsCollection
           .doc(
-            documentId,
-          )
+        documentId,
+      )
           .set(
         {
-          'start':
-              Timestamp.fromDate(
+          'start': Timestamp.fromDate(
             block.start,
           ),
-
-          'end':
-              Timestamp.fromDate(
+          'end': Timestamp.fromDate(
             block.end,
           ),
-
-          'dayKey':
-              _dayKey(
+          'dayKey': _dayKey(
             block.start,
           ),
         },
@@ -1062,24 +789,15 @@ class FirebaseScheduleRepository
     // 4. PRIVATE SCHEDULE PARENT
     // -----------------------------------------------------------------
 
-    await _scheduleDocument
-        .set(
+    await _scheduleDocument.set(
       {
-        'ownerId':
-            uid,
-
-        'source':
-            'google_calendar',
-
-        'lastImportedAt':
-            now,
-
-        'importedCount':
-            writtenCount,
+        'ownerId': uid,
+        'source': 'google_calendar',
+        'lastImportedAt': now,
+        'importedCount': writtenCount,
       },
       SetOptions(
-        merge:
-            true,
+        merge: true,
       ),
     );
 
@@ -1087,21 +805,14 @@ class FirebaseScheduleRepository
     // 5. AVAILABILITY PARENT
     // -----------------------------------------------------------------
 
-    await _availabilityDocument
-        .set(
+    await _availabilityDocument.set(
       {
-        'ownerId':
-            uid,
-
-        'slotCount':
-            writtenCount,
-
-        'updatedAt':
-            now,
+        'ownerId': uid,
+        'slotCount': (await _availabilitySlotsCollection.get()).docs.length,
+        'updatedAt': now,
       },
       SetOptions(
-        merge:
-            true,
+        merge: true,
       ),
     );
 
@@ -1129,32 +840,22 @@ class FirebaseScheduleRepository
   String _dayKey(
     DateTime value,
   ) {
-    final local =
-        value.toLocal();
+    final local = value.toLocal();
 
-    final year =
-        local.year
-            .toString()
-            .padLeft(
-              4,
-              '0',
-            );
+    final year = local.year.toString().padLeft(
+          4,
+          '0',
+        );
 
-    final month =
-        local.month
-            .toString()
-            .padLeft(
-              2,
-              '0',
-            );
+    final month = local.month.toString().padLeft(
+          2,
+          '0',
+        );
 
-    final day =
-        local.day
-            .toString()
-            .padLeft(
-              2,
-              '0',
-            );
+    final day = local.day.toString().padLeft(
+          2,
+          '0',
+        );
 
     return '$year-$month-$day';
   }
@@ -1176,8 +877,7 @@ class FirebaseScheduleRepository
   String _externalId(
     String value,
   ) {
-    const prefix =
-        'google-';
+    const prefix = 'google-';
 
     if (value.startsWith(
       prefix,
@@ -1193,26 +893,23 @@ class FirebaseScheduleRepository
   String _initials(
     String name,
   ) {
-    final words =
-        name
-            .trim()
-            .split(
-              RegExp(
-                r'\s+',
-              ),
-            )
-            .where(
-              (word) =>
-                  word.isNotEmpty,
-            )
-            .toList();
+    final words = name
+        .trim()
+        .split(
+          RegExp(
+            r'\s+',
+          ),
+        )
+        .where(
+          (word) => word.isNotEmpty,
+        )
+        .toList();
 
     if (words.isEmpty) {
       return '?';
     }
 
-    if (words.length ==
-        1) {
+    if (words.length == 1) {
       return words.first
           .substring(
             0,
@@ -1221,15 +918,14 @@ class FirebaseScheduleRepository
           .toUpperCase();
     }
 
-    return (
-      words.first.substring(
-            0,
-            1,
-          ) +
-      words.last.substring(
-            0,
-            1,
-          )
-    ).toUpperCase();
+    return (words.first.substring(
+              0,
+              1,
+            ) +
+            words.last.substring(
+              0,
+              1,
+            ))
+        .toUpperCase();
   }
 }

@@ -89,22 +89,17 @@ class _ScheduleViewState extends State<ScheduleView> {
                     widget.viewModel.refreshSchedule();
                   },
                 ),
-
                 _buildFriendBar(
                   context,
                   state,
                 ),
-                _buildCalendarImportBar(
-                  state,
-                ),
+                _buildCalendarIntegrationsRow(context, state),
                 _buildDurationBar(
                   state,
                 ),
                 _buildWeekSelector(
                   state,
                 ),
-
-          
                 if (state.status == ScheduleLoadStatus.error)
                   Expanded(
                     child: _buildErrorState(
@@ -265,178 +260,118 @@ class _ScheduleViewState extends State<ScheduleView> {
     );
   }
 
-  Widget _buildCalendarImportBar(
-    ScheduleState state,
-  ) {
+  Widget _buildCalendarIntegrationsRow(
+      BuildContext context, ScheduleState state) {
     final importing =
         state.calendarImportStatus == CalendarImportStatus.importing;
-
     final imported =
         state.calendarImportStatus == CalendarImportStatus.imported;
-
     final hasError = state.calendarImportStatus == CalendarImportStatus.error;
-
+    final border = BorderRadius.circular(12);
     return Container(
-      width: double.infinity,
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(
-        14,
-        4,
-        12,
-        8,
-      ),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 10,
-        ),
-        decoration: BoxDecoration(
-          color: const Color(
-            0xFFF7F9FD,
-          ),
-          borderRadius: BorderRadius.circular(
-            12,
-          ),
-          border: Border.all(
-            color: const Color(
-              0xFFDCE3EF,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
+      color: AppColors.surface,
+      padding: const EdgeInsets.fromLTRB(14, 4, 12, 8),
+      child: IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(
-                  0xFFEAF1FF,
+                  color: AppColors.blueTint,
+                  borderRadius: border,
+                  border: Border.all(color: AppColors.outlineSoft)),
+              child: Row(children: [
+                const Icon(Icons.calendar_month_outlined,
+                    size: 19, color: AppColors.primary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Google Calendar',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary)),
+                      Text(_calendarImportSubtitle(state),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: hasError
+                                  ? AppColors.error
+                                  : imported
+                                      ? AppColors.success
+                                      : AppColors.textSecondary)),
+                    ],
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(
-                  10,
-                ),
-              ),
-              child: const Icon(
-                Icons.calendar_month_outlined,
-                size: 20,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(
-              width: 10,
-            ),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Google Calendar',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(
-                    height: 2,
-                  ),
-                  Text(
-                    _calendarImportSubtitle(
-                      state,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: hasError
-                          ? AppColors.error
-                          : imported
-                              ? AppColors.success
-                              : AppColors.textSecondary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(
-              width: 8,
-            ),
-            SizedBox(
-              width: 105,
-              height: 34,
-              child: FilledButton.icon(
-                onPressed: importing || imported
-                    ? null
-                    : widget.viewModel.importGoogleCalendar,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: imported
-                      ? const Color(
-                          0xFFE8F8F0,
-                        )
-                      : const Color(
-                          0xFFE9EEF7,
-                        ),
-                  disabledForegroundColor:
-                      imported ? AppColors.success : AppColors.textSecondary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                  ),
-                  minimumSize: const Size(
-                    105,
-                    34,
-                  ),
-                  maximumSize: const Size(
-                    105,
-                    34,
-                  ),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      9,
+                const SizedBox(width: 5),
+                SizedBox(
+                  width: 64,
+                  height: 32,
+                  child: FilledButton(
+                    onPressed: importing || imported
+                        ? null
+                        : widget.viewModel.importGoogleCalendar,
+                    style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: importing
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : Text(
+                              imported
+                                  ? 'Imported'
+                                  : hasError
+                                      ? 'Try again'
+                                      : 'Import',
+                              style: const TextStyle(fontSize: 11)),
                     ),
                   ),
                 ),
-                icon: importing
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.primary,
-                        ),
-                      )
-                    : Icon(
-                        imported
-                            ? Icons.check_rounded
-                            : Icons.file_download_outlined,
-                        size: 17,
-                      ),
-                label: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    importing
-                        ? 'Importing'
-                        : imported
-                            ? 'Imported'
-                            : hasError
-                                ? 'Try again'
-                                : 'Import',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+              ]),
+            )),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Material(
+          color: AppColors.surface,
+          shape: RoundedRectangleBorder(
+              borderRadius: border,
+              side: const BorderSide(color: AppColors.outlineSoft)),
+          child: InkWell(
+              borderRadius: border,
+              onTap: () async {
+                final changed = await context.push<bool>(AppRoutes.andesEvents);
+                if (changed == true && mounted)
+                  await widget.viewModel.refreshSchedule();
+              },
+              child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.school_outlined, size: 20, color: AppColors.primary),
+                        SizedBox(height: 2),
+                        Text('Andes Events',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800)),
+                      ]))),
+        )),
+      ])),
     );
   }
 
