@@ -1,3 +1,6 @@
+import '../../features/help/data/help_repository.dart';
+import '../../features/help/presentation/help_view_model.dart';
+import '../../features/help/presentation/help_view.dart';
 import '../dependency_injection/expansion_dependencies.dart';
 import '../../features/activities/domain/entities/planning_context.dart';
 import 'package:go_router/go_router.dart';
@@ -136,6 +139,13 @@ abstract final class AppRouter {
             path: AppRoutes.andesEvents,
             builder: (context, state) =>
                 scheduleDependencies.andesEventsRoute(),
+          ),
+          GoRoute(
+            path: AppRoutes.help,
+            builder: (context, state) => HelpView(
+              origin: state.uri.queryParameters['origin'] ?? 'general',
+              viewModel: HelpViewModel(open: () => HelpRepository.open(firestore: scheduleDependencies.firebase?.firestore)),
+            ),
           ),
           GoRoute(
             path: AppRoutes.schedule,
