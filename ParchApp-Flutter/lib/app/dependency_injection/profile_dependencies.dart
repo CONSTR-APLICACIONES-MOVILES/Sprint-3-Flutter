@@ -12,18 +12,25 @@ import '../../features/profile/data/repositories/device_profile_photo_repository
 import '../../features/profile/domain/repositories/profile_photo_repository.dart';
 import '../../features/profile/domain/use_cases/change_profile_photo.dart';
 import '../../core/connectivity/connectivity_service.dart';
+import 'dart:async';
+import 'package:path_provider/path_provider.dart';
+import '../../features/activities/data/data_sources/firebase_activity_data_source.dart';
+import '../../features/activities/data/repositories/activity_history_repository.dart';
+import '../../features/activities/presentation/views/activity_history_view.dart';
 
 class ProfileDependencies {
   final ProfileRepository repository;
   final AuthRepository? authRepository;
   final ProfilePhotoRepository photos;
   final Future<bool> Function()? isOnline;
+  final ActivityHistoryRepository? history;
 
   const ProfileDependencies(
       {required this.repository,
       this.authRepository,
       required this.photos,
-      this.isOnline});
+      this.isOnline,
+      this.history});
 
   factory ProfileDependencies.mock({AuthRepository? authRepository}) =>
       ProfileDependencies(
@@ -32,12 +39,23 @@ class ProfileDependencies {
           photos: DeviceProfilePhotoRepository());
 
   factory ProfileDependencies.firebase(FirebaseDependencies firebase,
-          {required AuthRepository authRepository}) =>
-      ProfileDependencies(
-          repository: FirebaseProfileRepository(firebase.mobile),
-          authRepository: authRepository,
-          photos: DeviceProfilePhotoRepository(),
-          isOnline: ConnectivityService().hasConnection);
+      {required AuthRepository authRepository}) {
+    final isOnline = ConnectivityService().hasConnection;
+    return ProfileDependencies(
+        repository: FirebaseProfileRepository(firebase.mobile),
+        authRepository: authRepository,
+        photos: DeviceProfilePhotoRepository(),
+        isOnline: isOnline,
+        history: ActivityHistoryRepository(
+            remote: FirebaseActivityDataSource(
+                    functions: firebase.functions,
+                    auth: firebase.auth,
+                    firestore: firebase.firestore)
+                .listActivities,
+            directory: getApplicationDocumentsDirectory,
+            userId: () => firebase.auth.currentUser?.uid,
+            isOnline: isOnline));
+  }
 
   ProfileViewModel createViewModel() => ProfileViewModel(
         ManageProfile(repository),
@@ -46,6 +64,11 @@ class ProfileDependencies {
       );
 
   Widget route() => _ProfileEntry(dependencies: this);
+
+  Widget historyRoute() => history == null
+      ? const Scaffold(
+          body: Center(child: Text('Activity history is unavailable.')))
+      : ActivityHistoryView(repository: history!);
 }
 
 class _ProfileEntry extends StatefulWidget {
@@ -59,6 +82,11 @@ class _ProfileEntry extends StatefulWidget {
 class _ProfileEntryState extends State<_ProfileEntry> {
   late final ProfileViewModel _viewModel =
       widget.dependencies.createViewModel();
+      @override
+      void initState() {
+        super.initState();
+        unawaited(widget.dependencies.history?.prefetch());
+  }
 
   @override
   Widget build(BuildContext context) => ProfileView(viewModel: _viewModel);

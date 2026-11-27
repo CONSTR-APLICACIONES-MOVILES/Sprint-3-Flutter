@@ -174,6 +174,10 @@ abstract final class AppRouter {
             builder: (context, state) => profileDependencies.route(),
           ),
           GoRoute(
+            path: '/profile/history',
+            builder: (context, state) => profileDependencies.historyRoute(),
+          ),
+          GoRoute(
             path: AppRoutes.authComplete,
             redirect: (context, state) => AppRoutes.home,
           ),

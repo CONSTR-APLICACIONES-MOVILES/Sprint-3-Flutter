@@ -159,6 +159,11 @@ class _ProfileViewState extends State<ProfileView> {
                       title: 'My Groups',
                       subtitle: '${user.activeGroups} groups',
                       onTap: () => context.push(AppRoutes.groups)),
+                  ProfileMenuTile(
+                      icon: Icons.history,
+                      title: 'Activity history',
+                      subtitle: 'Your past activities, saved for offline use',
+                      onTap: () => context.push('/profile/history')),
                 ]),
                 const SizedBox(height: 22),
                 OutlinedButton.icon(
