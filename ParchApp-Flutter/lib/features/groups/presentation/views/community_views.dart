@@ -209,6 +209,14 @@ class _GroupDetailsViewState extends State<GroupDetailsView> {
                                 queryParameters: {'groupId': widget.groupId})
                             .toString()),
                         child: const Text('Compare schedules')),
+                    OutlinedButton.icon(
+                        onPressed: () => _open(Uri(
+                            path: '/groups/chat/${widget.groupId}',
+                            queryParameters: {
+                              'title': 'House Chat'
+                            }).toString()),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                        label: const Text('House Chat')),
                     if (group['ownerId'] == widget.repository.sessionId)
                       TextButton(
                           onPressed: () => _open(
