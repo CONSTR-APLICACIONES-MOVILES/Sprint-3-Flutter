@@ -12,7 +12,7 @@ import '../../domain/repositories/activity_drafts_repository.dart';
 /// A session-bound store. SQLite performs native disk work asynchronously;
 /// the queue orders read/modify/write operations and survives operation errors.
 class SqliteActivityDraftsRepository
-    implements SyncableActivityDraftsRepository {
+    implements ObservableActivityDraftsRepository {
   final Future<Database> Function() open;
   final bool Function() sessionIsCurrent;
   final String namespace;
@@ -21,7 +21,15 @@ class SqliteActivityDraftsRepository
   final bool Function()? canAttemptRemote;
   Future<void>? _syncing;
   bool _syncAgain = false;
+  bool _connectionUnavailable = false;
   String? _syncNotice;
+  final _changes = StreamController<void>.broadcast();
+  @override
+  Stream<void> get changes => _changes.stream;
+  @override
+  bool get isOffline =>
+      canAttemptRemote?.call() == false || _connectionUnavailable;
+  void _notify() => _changes.add(null);
   Future<void> _tail = Future.value();
   DraftsSnapshot? _cache;
   SqliteActivityDraftsRepository(
@@ -206,58 +214,64 @@ class SqliteActivityDraftsRepository
   Future<SavedActivityDraft> save(ActivityDraft activity,
           {SavedActivityDraft? previous}) =>
       _ordered(() async {
-        final payload = jsonEncode(_encode(activity));
-        if (utf8.encode(payload).length > 65536) {
-          throw const SessionFailure('This draft is too large to save.');
-        }
-        final db = await open();
-        _checkSession();
-        final record = SavedActivityDraft(
-            id: previous?.id ??
-                List.generate(
-                    24,
-                    (_) => Random.secure()
-                        .nextInt(256)
-                        .toRadixString(16)
-                        .padLeft(2, '0')).join(),
-            revision: (previous?.revision ?? 0) + 1,
-            updatedAt: DateTime.now().toUtc(),
-            activity: activity);
-        await db.transaction((tx) async {
-          _checkSession();
-          final values = {
-            'revision': record.revision,
-            'updated_at': record.updatedAt.millisecondsSinceEpoch,
-            'category': activity.category,
-            'state': 'active',
-            'payload': payload,
-            'pending': 1,
-            'operation_id': _newId(),
-            'request_key': activity.requestId,
-            // A conflict must be explicitly resolved, not silently overwritten.
-          };
-          if (previous == null) {
-            await tx.insert('activity_drafts',
-                {...values, 'namespace': namespace, 'id': record.id});
-          } else {
-            final changed = await tx.update('activity_drafts', values,
-                where:
-                    'namespace = ? AND id = ? AND revision = ? AND state = ?',
-                whereArgs: [
-                  namespace,
-                  previous.id,
-                  previous.revision,
-                  'active'
-                ]);
-            if (changed != 1) {
-              throw const SessionFailure(
-                  'This draft changed. Open My drafts again before saving.');
-            }
+        final task = TimelineTask()..start('activity_drafts.disk_save');
+        try {
+          final payload = jsonEncode(_encode(activity));
+          if (utf8.encode(payload).length > 65536) {
+            throw const SessionFailure('This draft is too large to save.');
           }
-        });
-        _cache = null;
-        if (remoteCall != null) unawaited(synchronize());
-        return record;
+          final db = await open();
+          _checkSession();
+          final record = SavedActivityDraft(
+              id: previous?.id ??
+                  List.generate(
+                      24,
+                      (_) => Random.secure()
+                          .nextInt(256)
+                          .toRadixString(16)
+                          .padLeft(2, '0')).join(),
+              revision: (previous?.revision ?? 0) + 1,
+              updatedAt: DateTime.now().toUtc(),
+              activity: activity);
+          await db.transaction((tx) async {
+            _checkSession();
+            final values = {
+              'revision': record.revision,
+              'updated_at': record.updatedAt.millisecondsSinceEpoch,
+              'category': activity.category,
+              'state': 'active',
+              'payload': payload,
+              'pending': 1,
+              'operation_id': _newId(),
+              'request_key': activity.requestId,
+              // A conflict must be explicitly resolved, not silently overwritten.
+            };
+            if (previous == null) {
+              await tx.insert('activity_drafts',
+                  {...values, 'namespace': namespace, 'id': record.id});
+            } else {
+              final changed = await tx.update('activity_drafts', values,
+                  where:
+                      'namespace = ? AND id = ? AND revision = ? AND state = ?',
+                  whereArgs: [
+                    namespace,
+                    previous.id,
+                    previous.revision,
+                    'active'
+                  ]);
+              if (changed != 1) {
+                throw const SessionFailure(
+                    'This draft changed. Open My drafts again before saving.');
+              }
+            }
+          });
+          _cache = null;
+          _notify();
+          if (remoteCall != null) unawaited(synchronize());
+          return record;
+        } finally {
+          task.finish();
+        }
       });
 
   Future<void> _finish(SavedActivityDraft record, String state) =>
@@ -279,6 +293,7 @@ class SqliteActivityDraftsRepository
         if (changed != 1) {
           throw const SessionFailure('This draft changed. Refresh My drafts.');
         }
+        _notify();
         if (remoteCall != null) unawaited(synchronize());
       });
 
@@ -297,19 +312,39 @@ class SqliteActivityDraftsRepository
     if (remoteCall == null ||
         canAttemptRemote?.call() == false ||
         !sessionIsCurrent()) {
+      _notify();
       return Future.value();
     }
     if (_syncing != null) {
       _syncAgain = true;
       return _syncing!;
     }
-    return _syncing = _runSync().whenComplete(() => _syncing = null);
+    return _syncing = _runSync().whenComplete(() {
+      _syncing = null;
+      _notify();
+    });
+  }
+
+  @override
+  Future<void> retryPending() async {
+    if (remoteCall == null ||
+        canAttemptRemote?.call() == false ||
+        !sessionIsCurrent()) {
+      return;
+    }
+    final rows = await _ordered(() async => (await open()).query(
+        'activity_drafts',
+        columns: ['id'],
+        where: 'namespace = ? AND pending = 1 AND sync_error IS NULL',
+        whereArgs: [namespace],
+        limit: 1));
+    if (rows.isNotEmpty) await synchronize();
   }
 
   Future<void> _runSync() async {
     do {
       _syncAgain = false;
-      if (!await _syncOnce()) break;
+      if (!await _syncOnce() && !_syncAgain) break;
     } while (
         _syncAgain && sessionIsCurrent() && canAttemptRemote?.call() != false);
   }
@@ -320,6 +355,7 @@ class SqliteActivityDraftsRepository
     if (canAttemptRemote?.call() == false) throw StateError('Offline');
     final result =
         await remoteCall!(name, input).timeout(const Duration(seconds: 8));
+    _connectionUnavailable = false;
     _checkSession();
     return result;
   }
@@ -409,9 +445,16 @@ class SqliteActivityDraftsRepository
       _syncNotice = null;
       _cache = null;
       return true;
-    } catch (_) {
+    } catch (error) {
+      String? code;
+      try {
+        code = (error as dynamic).code as String?;
+      } catch (_) {}
+      _connectionUnavailable = error is TimeoutException ||
+          {'unavailable', 'deadline-exceeded', 'network-request-failed'}
+              .contains(code);
       _syncNotice =
-          'Cloud sync is pending. Your saved changes remain on this device. Reconnect and tap Sync.';
+          'Saved on this device. Changes will update automatically when a connection is available.';
       _cache = null;
       return false;
     }

@@ -50,6 +50,13 @@ abstract interface class SyncableActivityDraftsRepository
       {required bool keepLocalCopy});
 }
 
+abstract interface class ObservableActivityDraftsRepository
+    implements SyncableActivityDraftsRepository {
+  Stream<void> get changes;
+  bool get isOffline;
+  Future<void> retryPending();
+}
+
 abstract interface class ActivityDraftsRepository {
   Future<DraftsSnapshot> load({bool refresh = false});
   Future<SavedActivityDraft> save(ActivityDraft activity,

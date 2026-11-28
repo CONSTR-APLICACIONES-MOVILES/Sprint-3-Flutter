@@ -32,5 +32,10 @@ coverage/
 /docs/business-questions.md
 /docs/MIS_BORRADORES_NOTAS_LOCALES.md
 
+# Local wiki/defense reports and generated profiling evidence live elsewhere.
+# Keep executable profiling tools and fixtures under tool/ versioned.
+/docs/profiling/
+/docs/SPRINT4_MIS_BORRADORES.md
+
 # Generated Kotlin compiler state
 /android/.kotlin/

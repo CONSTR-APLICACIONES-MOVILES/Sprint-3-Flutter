@@ -11,6 +11,8 @@ import '../../core/data/sqlite_offline_store.dart';
 import '../../core/data/restore_auth_session.dart';
 import 'dart:async';
 import '../../features/activities/data/data_sources/creation_attempt_monitor.dart';
+import '../../features/activities/data/repositories/sqlite_activity_drafts_repository.dart';
+import '../../features/activities/presentation/controllers/draft_sync_coordinator.dart';
 
 /// Uses the checked-in live configuration or the shared demo-parchapp emulators.
 class FirebaseDependencies {
@@ -19,8 +21,27 @@ class FirebaseDependencies {
   final FirebaseFunctions functions;
   final OfflineMobileApi mobile;
   final Map<String, CreationAttemptMonitor> _creationMonitors = {};
+  final Map<String, SqliteActivityDraftsRepository> _draftRepositories = {};
+  DraftSyncCoordinator? _draftSync;
   FirebaseDependencies._(
       this.auth, this.firestore, this.functions, this.mobile);
+
+  SqliteActivityDraftsRepository? get activityDrafts {
+    final uid = auth.currentUser?.uid;
+    if (uid == null) return null;
+    return _draftRepositories.putIfAbsent(
+        uid,
+        () => SqliteActivityDraftsRepository(
+            open: SqliteActivityDraftsRepository.openDefault,
+            namespace: '${auth.app.options.projectId}/$uid',
+            canAttemptRemote: () => mobile.canAttemptRemote,
+            sessionIsCurrent: () => auth.currentUser?.uid == uid,
+            remoteCall: (name, input) =>
+                FirebaseMobileApi(functions, auth: auth).call(name, {
+                  ...input,
+                  if (name != 'getActivityDrafts') 'clientUserId': uid,
+                })));
+  }
 
   Future<CreationAttemptMonitor> creationMonitor(String uid) async {
     final preferences = await SharedPreferences.getInstance();
@@ -122,6 +143,7 @@ class FirebaseDependencies {
     auth.authStateChanges().listen((_) {
       mobile.refreshSession();
       retryMetrics();
+      unawaited(dependencies._draftSync?.syncNow() ?? Future<void>.value());
     });
     var wasOffline = mobile.value.offline || mobile.value.forced;
     mobile.addListener(() {
@@ -130,6 +152,11 @@ class FirebaseDependencies {
       wasOffline = offline;
     });
     retryMetrics();
+    dependencies._draftSync = DraftSyncCoordinator(
+        connectivity: mobile,
+        canAttemptRemote: () => mobile.canAttemptRemote,
+        currentRepository: () => dependencies.activityDrafts)
+      ..start();
     return dependencies;
   }
 }

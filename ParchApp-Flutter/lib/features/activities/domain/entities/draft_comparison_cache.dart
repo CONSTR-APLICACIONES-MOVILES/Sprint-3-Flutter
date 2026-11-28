@@ -1,3 +1,4 @@
+import 'dart:developer';
 import '../repositories/activity_drafts_repository.dart';
 
 class DraftComparison {
@@ -47,33 +48,39 @@ class DraftComparisonCache {
     }
     leftId = a.id;
     rightId = b.id;
+    const bypassCache =
+        bool.fromEnvironment('DRAFTS_BYPASS_COMPARISON_CACHE');
     final key = _key(a, b);
-    final cached = _results.remove(key);
+    final cached = bypassCache ? null : _results.remove(key);
     if (cached != null) {
+      Timeline.instantSync('activity_drafts.comparison_cache_hit');
       _results[key] = cached;
       return result = cached;
     }
-    final left = a.activity, right = b.activity;
-    final timedLeft = left.startsAt != null && left.endsAt != null;
-    final timedRight = right.startsAt != null && right.endsAt != null;
-    final value = DraftComparison(
-        key: key,
-        leftTitle: left.title.trim().isEmpty ? 'Untitled activity' : left.title,
-        rightTitle:
-            right.title.trim().isEmpty ? 'Untitled activity' : right.title,
-        sameCategory: left.category == right.category,
-        samePlace: left.location.trim().isNotEmpty &&
-            left.location.trim() == right.location.trim(),
-        leftDuration:
-            timedLeft ? left.endsAt!.difference(left.startsAt!) : null,
-        rightDuration:
-            timedRight ? right.endsAt!.difference(right.startsAt!) : null,
-        overlapping: timedLeft && timedRight
-            ? left.startsAt!.isBefore(right.endsAt!) &&
-                right.startsAt!.isBefore(left.endsAt!)
-            : null);
-    _results[key] = value;
-    if (_results.length > 8) _results.remove(_results.keys.first);
-    return result = value;
+    return Timeline.timeSync('activity_drafts.comparison_compute', () {
+      final left = a.activity, right = b.activity;
+      final timedLeft = left.startsAt != null && left.endsAt != null;
+      final timedRight = right.startsAt != null && right.endsAt != null;
+      final value = DraftComparison(
+          key: key,
+          leftTitle:
+              left.title.trim().isEmpty ? 'Untitled activity' : left.title,
+          rightTitle:
+              right.title.trim().isEmpty ? 'Untitled activity' : right.title,
+          sameCategory: left.category == right.category,
+          samePlace: left.location.trim().isNotEmpty &&
+              left.location.trim() == right.location.trim(),
+          leftDuration:
+              timedLeft ? left.endsAt!.difference(left.startsAt!) : null,
+          rightDuration:
+              timedRight ? right.endsAt!.difference(right.startsAt!) : null,
+          overlapping: timedLeft && timedRight
+              ? left.startsAt!.isBefore(right.endsAt!) &&
+                  right.startsAt!.isBefore(left.endsAt!)
+              : null);
+      _results[key] = value;
+      if (_results.length > 8) _results.remove(_results.keys.first);
+      return result = value;
+    });
   }
 }

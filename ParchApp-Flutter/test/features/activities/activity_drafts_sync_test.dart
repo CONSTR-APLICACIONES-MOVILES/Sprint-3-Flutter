@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:parchapp/features/activities/data/repositories/sqlite_activity_drafts_repository.dart';
 import 'package:parchapp/features/activities/domain/entities/activity_draft.dart';
 import 'package:parchapp/features/activities/domain/entities/draft_comparison_cache.dart';
 import 'package:parchapp/features/activities/domain/repositories/activity_drafts_repository.dart';
+import 'package:parchapp/features/activities/presentation/controllers/draft_sync_coordinator.dart';
 
 class SyncFailure implements Exception {
   final String code;
@@ -53,6 +55,7 @@ class DraftCloud {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   sqfliteFfiInit();
   late Directory dir;
   late Database db, otherDb;
@@ -102,6 +105,71 @@ void main() {
     await second.synchronize();
     expect((await second.load()).drafts, isEmpty);
     expect(cloud.records.values.single['state'], 'deleted');
+  });
+
+  test(
+      'reconnecting uploads saved drafts without an editor or manual sync action',
+      () async {
+    final available = ValueNotifier(false);
+    final first = SqliteActivityDraftsRepository(
+        open: () async => db,
+        namespace: 'test/alice',
+        sessionIsCurrent: () => true,
+        remoteCall: cloud.call,
+        canAttemptRemote: () => available.value);
+    final coordinator = DraftSyncCoordinator(
+        connectivity: available,
+        canAttemptRemote: () => available.value,
+        currentRepository: () => first,
+        retryInterval: const Duration(days: 1))
+      ..start();
+    try {
+      await first.save(const ActivityDraft(groupId: '', title: '000'));
+      expect(first.isOffline, isTrue);
+      expect(cloud.records, isEmpty);
+      final uploaded = first.changes.asyncMap((_) => first.load()).firstWhere(
+          (s) =>
+              s.drafts.isNotEmpty &&
+              s.drafts.every((d) => d.syncStatus == 'synced'));
+      available.value = true;
+      await uploaded.timeout(const Duration(seconds: 10));
+      expect(cloud.records.values.single['payload']['title'], '000');
+      expect(first.isOffline, isFalse);
+    } finally {
+      coordinator.dispose();
+      available.dispose();
+    }
+  });
+
+  test(
+      'a temporary failure retries automatically even if the network interface stays available',
+      () async {
+    final available = ValueNotifier(true);
+    final first = repo();
+    await first
+        .save(const ActivityDraft(groupId: '', title: 'Retry automatically'));
+    cloud.loseResponse = true;
+    online = true;
+    final uploaded = first.changes.asyncMap((_) => first.load()).firstWhere(
+        (s) =>
+            s.drafts.isNotEmpty &&
+            s.drafts.every((d) => d.syncStatus == 'synced'));
+    final coordinator = DraftSyncCoordinator(
+        connectivity: available,
+        canAttemptRemote: () => available.value,
+        currentRepository: () => first,
+        retryInterval: const Duration(milliseconds: 30))
+      ..start();
+    try {
+      await uploaded.timeout(const Duration(seconds: 10));
+      expect(cloud.records, hasLength(1));
+      expect(cloud.records.values.single['version'], 1);
+      expect(first.isOffline, isFalse);
+    } finally {
+      coordinator.dispose();
+      available.dispose();
+      await first.synchronize();
+    }
   });
 
   test(
