@@ -361,7 +361,8 @@ class _ScheduleViewState extends State<ScheduleView> {
                   child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.school_outlined, size: 20, color: AppColors.primary),
+                        Icon(Icons.school_outlined,
+                            size: 20, color: AppColors.primary),
                         SizedBox(height: 2),
                         Text('Andes Events',
                             textAlign: TextAlign.center,
@@ -1524,19 +1525,13 @@ class _ScheduleViewState extends State<ScheduleView> {
                     children: [
                       _buildTimeColumn(),
                       Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildMyScheduleLane(
-                                state,
-                              ),
-                            ),
-                            Expanded(
-                              child: _buildFriendsLane(
-                                state,
-                              ),
-                            ),
-                          ],
+                        child: _buildMyScheduleLane(
+                          state,
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildFriendsLane(
+                          state,
                         ),
                       ),
                     ],
@@ -1684,19 +1679,10 @@ class _ScheduleViewState extends State<ScheduleView> {
               top: (hour - _startHour) * 60.0,
               left: 0,
               right: 0,
-              child: SizedBox(
+              child: const SizedBox(
                 height: 1,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        height: 1,
-                        color: const Color(
-                          0xFFE2E8F0,
-                        ),
-                      ),
-                    ),
-                  ],
+                child: ColoredBox(
+                  color: Color(0xFFE2E8F0),
                 ),
               ),
             ),
@@ -1790,11 +1776,9 @@ class _ScheduleViewState extends State<ScheduleView> {
         top: index * 60.0,
         left: 0,
         right: 0,
-        child: Container(
-          height: 1,
-          color: const Color(
-            0xFFE8EDF5,
-          ),
+        height: 1,
+        child: const ColoredBox(
+          color: Color(0xFFE8EDF5),
         ),
       ),
     );
