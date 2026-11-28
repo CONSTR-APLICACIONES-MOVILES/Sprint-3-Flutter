@@ -63,6 +63,20 @@ class ParchAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: Container(height: 1, color: AppColors.outlineSoft)),
         actions: [
           IconButton(
+              tooltip: 'Help',
+              style: IconButton.styleFrom(backgroundColor: const Color(0xFFEEF4FF), foregroundColor: AppColors.textPrimary),
+              icon: const Icon(Icons.help_outline, size: 22),
+              onPressed: () {
+                final path = GoRouterState.of(context).uri.path;
+                final origin = path.startsWith(AppRoutes.andesEvents) ? 'andes'
+                    : path.startsWith(AppRoutes.schedule) ? 'schedule'
+                    : path.startsWith(AppRoutes.groups) ? 'groups'
+                    : path.startsWith(AppRoutes.alerts) ? 'alerts'
+                    : path.startsWith(AppRoutes.profile) ? 'profile'
+                    : path.startsWith(AppRoutes.home) ? 'dashboard' : 'general';
+                _open(context, Uri(path: AppRoutes.help, queryParameters: {'origin': origin}).toString());
+              }),
+          IconButton(
               tooltip: 'Search',
               style: IconButton.styleFrom(
                   backgroundColor: AppColors.blueTint,

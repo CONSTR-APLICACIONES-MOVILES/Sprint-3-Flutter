@@ -26,25 +26,45 @@ class ProfileView extends StatefulWidget {
 
 class _ProfileViewState extends State<ProfileView> {
   Timer? _expiryTimer;
-  @override
-  void dispose() {
-    _expiryTimer?.cancel();
-    super.dispose();
-  }
+  DateTime? _scheduledFor;
 
   @override
   void initState() {
     super.initState();
+    widget.viewModel.addListener(_scheduleExpiry);
+    _scheduleExpiry();
     widget.viewModel.load();
-    _expiryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() {});
-    });
   }
 
   @override
   void didUpdateWidget(covariant ProfileView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.viewModel != widget.viewModel) widget.viewModel.load();
+    if (oldWidget.viewModel != widget.viewModel) {
+      oldWidget.viewModel.removeListener(_scheduleExpiry);
+      widget.viewModel.addListener(_scheduleExpiry);
+      widget.viewModel.load();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.viewModel.removeListener(_scheduleExpiry);
+    _expiryTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleExpiry() {
+    final expiresAt = widget.viewModel.value.user?.statusExpiresAt;
+    if (expiresAt == _scheduledFor) return;
+    _scheduledFor = expiresAt;
+    _expiryTimer?.cancel();
+    _expiryTimer = null;
+    if (expiresAt == null) return;
+    final wait = expiresAt.difference(DateTime.now());
+    if (wait.isNegative) return;
+    _expiryTimer = Timer(wait + const Duration(seconds: 1), () {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -159,6 +179,11 @@ class _ProfileViewState extends State<ProfileView> {
                       title: 'My Groups',
                       subtitle: '${user.activeGroups} groups',
                       onTap: () => context.push(AppRoutes.groups)),
+                  ProfileMenuTile(
+                      icon: Icons.history,
+                      title: 'Activity history',
+                      subtitle: 'Your past activities, saved for offline use',
+                      onTap: () => context.push('/profile/history')),
                 ]),
                 const SizedBox(height: 22),
                 OutlinedButton.icon(

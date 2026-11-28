@@ -1,0 +1,11 @@
+# Andes Events
+
+## Local Storage Strategy
+
+Saved Events are user-selected snapshots stored on the device in the SQLite database `parchapp-saved-andes-events.sqlite`. The `saved_andes_events` table stores the Firebase project and user namespace, event ID, title, category, description, location, start and end instants, save time, and optional source URL. Dates use Unix milliseconds. Its `(user_id, event_id)` primary key prevents duplicates; no credentials or tokens are stored.
+
+SQLite is already a project dependency and provides durable, structured, asynchronous local operations with a composite key. A separate database avoids changing the existing offline-store schema and data. `lib/features/andes_events/data/repositories/sqlite_saved_andes_events_repository.dart` creates the table and implements `save`, `remove`, `getSaved`, and `isSaved`. The database file is reopened after application or device restarts. `lib/features/andes_events/presentation/view_models/andes_events_view_model.dart` loads saved records independently of the catalog, listens for account changes, clears the previous account's visible state, and calls the local repository from `toggleSaved`. The Firebase project ID and UID form the account namespace in `lib/app/dependency_injection/schedule_dependencies.dart`.
+
+This is local storage of explicit bookmarks, not a cache of Firestore query results. Firestore remains the source for the live catalog and Add to Schedule; saving does not write to Firestore or availability. Saved snapshots can be read without a network connection, but may become stale, remain only on the device, are not synchronized between devices, and can be lost if app data is deleted. SQLite is not supported by this implementation on web; failures appear in the Saved tab. A signed-in account is required. The local database does not provide encryption or protection against someone with access to the device's app data.
+
+**Oral defense:** “We use SQLite to persist events that a user explicitly bookmarks. Each row belongs to a Firebase project and user, and its composite key prevents duplicates. The Saved tab reads those snapshots directly from the device, even when the catalog is offline. They are separate from Firestore and may be out of date; saving never changes the user's schedule.”

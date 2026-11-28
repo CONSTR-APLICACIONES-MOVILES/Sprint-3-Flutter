@@ -7,9 +7,17 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+  errors:
+    deprecated_member_use: ignore
 include: package:flutter_lints/flutter.yaml
-
 linter:
   rules:
     prefer_const_constructors: true
     prefer_const_literals_to_create_immutables: true
+    prefer_const_declarations: true
+    prefer_final_locals: true
+    avoid_unnecessary_containers: true
+    sized_box_for_whitespace: true
+    cancel_subscriptions: true
+    close_sinks: true
+    avoid_function_literals_in_foreach_calls: true

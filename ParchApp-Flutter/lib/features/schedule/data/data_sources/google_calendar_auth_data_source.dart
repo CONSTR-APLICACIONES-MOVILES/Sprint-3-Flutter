@@ -3,7 +3,7 @@ import '../../../../core/auth/google_sign_in_session.dart';
 
 class GoogleCalendarAuthDataSource {
   static const List<String> calendarScopes = [
-    'https://www.googleapis.com/auth/calendar.freebusy',
+    'https://www.googleapis.com/auth/calendar.events.readonly',
   ];
 
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
@@ -21,9 +21,13 @@ class GoogleCalendarAuthDataSource {
   }
 
   Future<GoogleSignInClientAuthorization> getCalendarAuthorization() async {
-    final account = await authorizeCalendar();
-    return account.authorizationClient.authorizeScopes(
-        const ['https://www.googleapis.com/auth/calendar.events.readonly']);
+    // The import flow already authenticated the user before fetching events.
+    // Reuse that account instead of opening the account picker a second time.
+    final account = _account ?? await authorizeCalendar();
+    final existingAuthorization =
+        await account.authorizationClient.authorizationForScopes(calendarScopes);
+    if (existingAuthorization != null) return existingAuthorization;
+    return account.authorizationClient.authorizeScopes(calendarScopes);
   }
 
   Future<void> initialize() async {

@@ -16,6 +16,7 @@ import '../../domain/use_cases/manage_schedule.dart';
 import '../../domain/use_cases/get_schedule_preferences.dart';
 import '../../domain/use_cases/save_schedule_preferences.dart';
 
+
 import 'schedule_state.dart';
 
 class ScheduleViewModel extends ValueNotifier<ScheduleState> {
@@ -37,7 +38,7 @@ class ScheduleViewModel extends ValueNotifier<ScheduleState> {
   final ConnectivityService _connectivityService;
 
   final ScheduleCacheMetadataRepository _cacheMetadataRepository;
-
+//subscription for internet connectivity changes
   StreamSubscription<bool>? _connectivitySubscription;
 
   bool _connectivityMonitoringStarted = false;
@@ -199,9 +200,7 @@ class ScheduleViewModel extends ValueNotifier<ScheduleState> {
       _emit(
         value.copyWith(
           friends: friends,
-          selectedFriendIds: selectedFriendIds.isEmpty
-              ? friends.take(2).map((friend) => friend.id).toList()
-              : selectedFriendIds,
+          selectedFriendIds: selectedFriendIds,
         ),
       );
 
@@ -478,7 +477,7 @@ class ScheduleViewModel extends ValueNotifier<ScheduleState> {
   }
 
   // ===================================================================
-  // GOOGLE CALENDAR IMPORT
+  // GOOGLE CALENDAR IMPORT - sync/await 
   // ===================================================================
 
   Future<void> importGoogleCalendar() async {

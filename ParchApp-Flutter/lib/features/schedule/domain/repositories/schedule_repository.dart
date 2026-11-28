@@ -25,4 +25,6 @@ abstract interface class ScheduleRepository {
   Future<void> replaceImportedCalendarBlocks(
     List<ScheduleBlock> blocks,
   );
+
+  
 }

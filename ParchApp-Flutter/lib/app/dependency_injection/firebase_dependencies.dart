@@ -1,3 +1,8 @@
+import '../../features/andes_events/data/repositories/firebase_schedule_intent_sender.dart';
+import '../../features/andes_events/data/repositories/sqlite_schedule_outbox.dart';
+import '../../features/andes_events/domain/services/schedule_outbox.dart';
+import '../../core/connectivity/connectivity_service.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -20,6 +25,7 @@ class FirebaseDependencies {
   final FirebaseFirestore firestore;
   final FirebaseFunctions functions;
   final OfflineMobileApi mobile;
+  late final ScheduleOutbox scheduleOutbox;
   final Map<String, CreationAttemptMonitor> _creationMonitors = {};
   final Map<String, SqliteActivityDraftsRepository> _draftRepositories = {};
   DraftSyncCoordinator? _draftSync;
@@ -130,6 +136,14 @@ class FirebaseDependencies {
         currentUserId: () => auth.currentUser?.uid);
     final dependencies =
         FirebaseDependencies._(auth, firestore, functions, mobile);
+    dependencies.scheduleOutbox = ScheduleOutbox(
+      SqliteScheduleOutbox(), FirebaseScheduleIntentSender(firestore, auth),
+      () => auth.currentUser == null ? null : '${app.options.projectId}:${auth.currentUser!.uid}');
+    final outbox = dependencies.scheduleOutbox;
+    void syncOutbox() { unawaited(outbox.sync().catchError((Object _) {})); }
+    final connectivity = ConnectivityService();
+    connectivity.connectionChanges.listen((available) { if (available) syncOutbox(); });
+    WidgetsBinding.instance.addObserver(_OutboxLifecycle(syncOutbox));
     void retryMetrics() {
       final uid = auth.currentUser?.uid;
       if (uid != null) {
@@ -142,6 +156,7 @@ class FirebaseDependencies {
 
     auth.authStateChanges().listen((_) {
       mobile.refreshSession();
+      syncOutbox();
       retryMetrics();
       unawaited(dependencies._draftSync?.syncNow() ?? Future<void>.value());
     });
@@ -157,6 +172,16 @@ class FirebaseDependencies {
         canAttemptRemote: () => mobile.canAttemptRemote,
         currentRepository: () => dependencies.activityDrafts)
       ..start();
+    syncOutbox();
     return dependencies;
+  }
+}
+
+class _OutboxLifecycle with WidgetsBindingObserver {
+  final void Function() sync;
+  _OutboxLifecycle(this.sync);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) sync();
   }
 }

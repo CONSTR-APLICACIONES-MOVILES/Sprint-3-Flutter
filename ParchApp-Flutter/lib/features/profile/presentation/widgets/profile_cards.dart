@@ -8,6 +8,19 @@ class ProfileIdentityCard extends StatelessWidget {
   final ProfileUser user;
   final bool busy;
   final VoidCallback onChangeStatus;
+  static String? _photoSource;
+  static ImageProvider? _photo;
+
+  static ImageProvider _photoFor(String path) {
+    final cached = _photo;
+    if (cached != null && _photoSource == path) return cached;
+    final provider = path.startsWith('data:')
+        ? MemoryImage(base64Decode(path.substring(path.indexOf(',') + 1)))
+        : NetworkImage(path) as ImageProvider;
+    _photoSource = path;
+    _photo = provider;
+    return provider;
+  }
 
   const ProfileIdentityCard({
     super.key,
@@ -35,10 +48,7 @@ class ProfileIdentityCard extends StatelessWidget {
                       fontSize: 32,
                       fontWeight: FontWeight.w800))
               : Image(
-                  image: user.photoPath!.startsWith('data:')
-                      ? MemoryImage(
-                          base64Decode(user.photoPath!.split(',').last))
-                      : NetworkImage(user.photoPath!) as ImageProvider,
+                  image: _photoFor(user.photoPath!),
                   width: 96,
                   height: 96,
                   fit: BoxFit.cover,

@@ -1,3 +1,6 @@
+import '../../features/help/data/help_repository.dart';
+import '../../features/help/presentation/help_view_model.dart';
+import '../../features/help/presentation/help_view.dart';
 import '../dependency_injection/expansion_dependencies.dart';
 import '../../features/activities/domain/entities/planning_context.dart';
 import 'package:go_router/go_router.dart';
@@ -83,6 +86,12 @@ abstract final class AppRouter {
               builder: (context, state) =>
                   groupsDependencies.invitationsRoute()),
           GoRoute(
+              path: '/groups/chat/:groupId',
+              builder: (context, state) => groupsDependencies.chatRoute(
+                  state.pathParameters['groupId']!,
+                  friendId: state.uri.queryParameters['with'],
+                  title: state.uri.queryParameters['title'])),
+          GoRoute(
               path: AppRoutes.groupDetailsPattern,
               builder: (context, state) => groupsDependencies
                   .detailsRoute(state.pathParameters['groupId']!)),
@@ -133,6 +142,18 @@ abstract final class AppRouter {
             builder: (context, state) => groupsDependencies.activeGroupsRoute(),
           ),
           GoRoute(
+            path: AppRoutes.andesEvents,
+            builder: (context, state) =>
+                scheduleDependencies.andesEventsRoute(),
+          ),
+          GoRoute(
+            path: AppRoutes.help,
+            builder: (context, state) => HelpView(
+              origin: state.uri.queryParameters['origin'] ?? 'general',
+              viewModel: HelpViewModel(open: () => HelpRepository.open(firestore: scheduleDependencies.firebase?.firestore)),
+            ),
+          ),
+          GoRoute(
             path: AppRoutes.schedule,
             builder: (context, state) => scheduleDependencies.route(
                 groupId: state.uri.queryParameters['groupId'],
@@ -172,6 +193,10 @@ abstract final class AppRouter {
             path: AppRoutes.profile,
             name: 'profile',
             builder: (context, state) => profileDependencies.route(),
+          ),
+          GoRoute(
+            path: '/profile/history',
+            builder: (context, state) => profileDependencies.historyRoute(),
           ),
           GoRoute(
             path: AppRoutes.authComplete,

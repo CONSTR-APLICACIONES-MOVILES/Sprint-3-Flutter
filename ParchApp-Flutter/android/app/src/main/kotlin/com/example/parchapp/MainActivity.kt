@@ -4,6 +4,11 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.content.pm.PackageManager
+import android.content.Intent
+import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.BatteryManager
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AutocompleteSessionToken
@@ -20,6 +25,21 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "parchapp/help_refresh")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "eligible") { result.notImplemented(); return@setMethodCallHandler }
+                val manager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+                val caps = manager.getNetworkCapabilities(manager.activeNetwork)
+                val wifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true &&
+                    caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                val level = battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+                val scale = battery?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+                val status = battery?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+                val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+                val low = level >= 0 && scale > 0 && !charging && level * 100f / scale < 15f
+                result.success(wifi && !low)
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "parchapp/google_places")
             .setMethodCallHandler { call, result ->
                 if (call.method == "isConfigured") {

@@ -16,6 +16,7 @@ class ConnectivityService {
       results,
     );
   }
+  // Returns a stream of connectivity changes, emitting true when connected and false when disconnected.
 
   Stream<bool> get connectionChanges {
     return _connectivity
