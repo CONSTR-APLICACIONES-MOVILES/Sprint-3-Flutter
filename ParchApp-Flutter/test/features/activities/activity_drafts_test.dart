@@ -53,6 +53,39 @@ class OfflineGroups extends FakeActivitySource {
       throw const SessionFailure('Offline');
 }
 
+class AutomaticUiDrafts extends UiDrafts
+    implements ObservableActivityDraftsRepository {
+  final events = StreamController<void>.broadcast();
+  bool offline = true;
+  @override
+  Stream<void> get changes => events.stream;
+  @override
+  bool get isOffline => offline;
+  @override
+  Future<void> retryPending() => synchronize();
+  @override
+  Future<void> synchronize() async {
+    if (!offline) {
+      final updated = records
+          .map((r) => SavedActivityDraft(
+              id: r.id,
+              revision: r.revision,
+              updatedAt: r.updatedAt,
+              activity: r.activity,
+              syncStatus: 'synced'))
+          .toList();
+      records
+        ..clear()
+        ..addAll(updated);
+    }
+    events.add(null);
+  }
+
+  @override
+  Future<void> resolveConflict(SavedActivityDraft draft,
+      {required bool keepLocalCopy}) async {}
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   sqfliteFfiInit();
@@ -70,6 +103,30 @@ void main() {
     directory = await Directory.systemTemp.createTemp('parchapp-drafts-');
     db = await SqliteActivityDraftsRepository.openDatabaseForDrafts(
         factory: databaseFactoryFfi, path: '${directory.path}/drafts.sqlite');
+  });
+
+  testWidgets(
+      'drafts show offline state and update automatically without a sync button',
+      (tester) async {
+    final repo = AutomaticUiDrafts();
+    await repo.save(const ActivityDraft(groupId: '', title: '000'));
+    await tester
+        .pumpWidget(MaterialApp(home: ActivityDraftsView(repository: repo)));
+    await tester.pumpAndSettle();
+    expect(find.text('Sync drafts'), findsNothing);
+    expect(find.textContaining('Cloud sync'), findsNothing);
+    expect(find.text('You’re offline. Drafts are saved on this device.'),
+        findsOneWidget);
+    repo.offline = false;
+    await repo.synchronize();
+    await tester.pumpAndSettle();
+    expect(find.text('You’re offline. Drafts are saved on this device.'),
+        findsNothing);
+    await tester.scrollUntilVisible(find.text('Saved to your account'), 200);
+    await tester.pumpAndSettle();
+    expect(find.text('Saved to your account'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await repo.events.close();
   });
   tearDown(() async {
     await db.close();
@@ -208,7 +265,7 @@ void main() {
         find.ancestor(of: find.text('First plan'), matching: find.byType(Card));
     final firstContinue =
         find.descendant(of: firstCard, matching: find.text('Continue'));
-    await tester.ensureVisible(firstContinue);
+    await tester.scrollUntilVisible(firstContinue, 200);
     await tester.pumpAndSettle();
     await tester.tap(firstContinue);
     await tester.pumpAndSettle();
@@ -466,8 +523,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('My drafts'));
     await tester.pumpAndSettle();
-    expect(find.text('Study tomorrow'), findsOneWidget);
     expect(find.textContaining('Not enough history'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Study tomorrow'), 200);
+    expect(find.text('Study tomorrow'), findsOneWidget);
     await tester.ensureVisible(find.text('Continue'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continue'));
@@ -475,7 +533,7 @@ void main() {
     expect(find.widgetWithText(TextField, 'Study tomorrow'), findsOneWidget);
     await tester.tap(find.text('My drafts'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Delete'));
+    await tester.scrollUntilVisible(find.text('Delete'), 200);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();

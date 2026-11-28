@@ -10,6 +10,7 @@ import '../views/activity_drafts_view.dart';
 import '../../domain/entities/draft_comparison_cache.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:developer';
 
 class ActivityForm extends StatefulWidget {
   final ActivityEditorViewModel viewModel;
@@ -67,18 +68,26 @@ class ActivityFormState extends State<ActivityForm>
     if (mounted && !_restoring && !_allowExit) setState(() {});
   }
 
-  bool get _needsSave =>
-      widget.viewModel.drafts != null &&
-      widget.viewModel.session == null &&
-      _savedFingerprint != _fingerprint();
+  bool get _needsSave {
+    if (widget.viewModel.drafts == null || widget.viewModel.session != null) {
+      return false;
+    }
+    const bypassFingerprint =
+        bool.fromEnvironment('DRAFTS_BYPASS_FINGERPRINT');
+    if (bypassFingerprint) {
+      Timeline.instantSync('activity_drafts.autosave_forced_baseline');
+      return true;
+    }
+    final dirty = Timeline.timeSync('activity_drafts.fingerprint_check',
+        () => _savedFingerprint != _fingerprint());
+    if (!dirty) {
+      Timeline.instantSync('activity_drafts.autosave_skipped_clean');
+    }
+    return dirty;
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final drafts = widget.viewModel.drafts;
-    if (state == AppLifecycleState.resumed &&
-        drafts is SyncableActivityDraftsRepository) {
-      unawaited(drafts.synchronize());
-    }
     if ((state == AppLifecycleState.paused ||
             state == AppLifecycleState.hidden) &&
         _needsSave &&
@@ -350,7 +359,7 @@ class ActivityFormState extends State<ActivityForm>
                               label: const Text('New draft')),
                         ]),
                         const Text(
-                            'Changes are saved on this device when you leave Details. Cloud sync runs when connected.'),
+                            'Changes are saved when you leave Details. Your drafts update across devices when you’re connected.'),
                         if (widget.viewModel.draftNotice != null)
                           Text(widget.viewModel.draftNotice!),
                         const SizedBox(height: 16),

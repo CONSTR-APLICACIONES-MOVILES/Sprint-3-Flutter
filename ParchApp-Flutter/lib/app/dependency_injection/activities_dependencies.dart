@@ -18,8 +18,6 @@ import '../router/app_routes.dart';
 import '../../features/activities/presentation/view_models/activity_editor_view_model.dart';
 import '../../features/activities/presentation/widgets/activity_form.dart';
 import '../../features/activities/domain/repositories/activity_drafts_repository.dart';
-import '../../features/activities/data/repositories/sqlite_activity_drafts_repository.dart';
-import '../../core/data/mobile_api.dart';
 import '../../features/activities/data/data_sources/firebase_activity_data_source.dart';
 import '../../features/activities/data/data_sources/google_places_source.dart';
 import '../../features/activities/domain/repositories/places_source.dart';
@@ -54,8 +52,7 @@ class ActivitiesDependencies {
   final String? Function()? currentUserId;
   final String Function()? currentName;
   final QuickStatusRepository? quickStatuses;
-  final ActivityDraftsRepository Function()? draftsFactory;
-  final Listenable? draftConnectivity;
+  final ActivityDraftsRepository? Function()? draftsFactory;
   const ActivitiesDependencies(
       {required this.repository,
       this.places = const GooglePlacesSource(),
@@ -67,7 +64,6 @@ class ActivitiesDependencies {
       this.currentUserId,
       this.currentName,
       this.draftsFactory,
-      this.draftConnectivity,
       this.quickStatuses});
   factory ActivitiesDependencies.mock() => ActivitiesDependencies(
       repository: MockStudySessionsRepository(), isDemo: true);
@@ -90,22 +86,7 @@ class ActivitiesDependencies {
             currentUserId: () => firebase.auth.currentUser?.uid),
         quickStatuses: PreferencesQuickStatusRepository(
             firebase.auth.app.options.projectId),
-        draftsFactory: () {
-          final uid = firebase.auth.currentUser?.uid;
-          return SqliteActivityDraftsRepository(
-              open: SqliteActivityDraftsRepository.openDefault,
-              namespace: '${firebase.auth.app.options.projectId}/$uid',
-              canAttemptRemote: () => firebase.mobile.canAttemptRemote,
-              remoteCall: (name, input) =>
-                  FirebaseMobileApi(firebase.functions, auth: firebase.auth)
-                      .call(name, {
-                    ...input,
-                    if (name != 'getActivityDrafts') 'clientUserId': uid
-                  }),
-              sessionIsCurrent: () =>
-                  uid != null && firebase.auth.currentUser?.uid == uid);
-        },
-        draftConnectivity: firebase.mobile,
+        draftsFactory: () => firebase.activityDrafts,
         currentUserId: () => firebase.auth.currentUser?.uid,
         currentName: () =>
             firebase.auth.currentUser?.displayName ??
@@ -153,7 +134,6 @@ class ActivitiesDependencies {
       _CreateActivityEntry(
           repository: repository,
           drafts: draftsFactory?.call(),
-          draftConnectivity: draftConnectivity,
           places: places,
           date: date,
           time: time,
@@ -164,7 +144,6 @@ class ActivitiesDependencies {
 
 class _CreateActivityEntry extends StatefulWidget {
   final ActivityDraftsRepository? drafts;
-  final Listenable? draftConnectivity;
   final PlacesSource places;
   final StudySessionsRepository repository;
   final String date, time;
@@ -174,7 +153,6 @@ class _CreateActivityEntry extends StatefulWidget {
   const _CreateActivityEntry(
       {required this.repository,
       this.drafts,
-      this.draftConnectivity,
       required this.places,
       required this.date,
       required this.time,
@@ -186,20 +164,6 @@ class _CreateActivityEntry extends StatefulWidget {
 }
 
 class _CreateActivityEntryState extends State<_CreateActivityEntry> {
-  void _syncDrafts() {
-    final drafts = widget.drafts;
-    if (drafts is SyncableActivityDraftsRepository) {
-      unawaited(drafts.synchronize());
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    widget.draftConnectivity?.addListener(_syncDrafts);
-    _syncDrafts();
-  }
-
   final _formKey = GlobalKey<ActivityFormState>();
   void _leave() {
     if (!mounted) return;
@@ -243,7 +207,6 @@ class _CreateActivityEntryState extends State<_CreateActivityEntry> {
                           extra: id))))));
   @override
   void dispose() {
-    widget.draftConnectivity?.removeListener(_syncDrafts);
     model.dispose();
     super.dispose();
   }
