@@ -34,3 +34,4 @@ coverage/
 
 # Generated Kotlin compiler state
 /android/.kotlin/
+maps_keys.json
