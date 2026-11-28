@@ -67,21 +67,22 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 
+		
 	<key>GIDClientID</key>
-	<string>632049552762-f4kvc3h556t9ijsq36hnn3kk4d62g2od.apps.googleusercontent.com</string>
+	<string>718308941728-l4698k4mg3ssuop98egc406dn9vnbcnv.apps.googleusercontent.com</string>
 
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
-
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.632049552762-f4kvc3h556t9ijsq36hnn3kk4d62g2od</string>
+				<string>com.googleusercontent.apps.718308941728-l4698k4mg3ssuop98egc406dn9vnbcnv</string>
 			</array>
 		</dict>
 	</array>
+
 
 	<key>NSCameraUsageDescription</key>
 	<string>ParchApp uses the camera to take your profile photo.</string>

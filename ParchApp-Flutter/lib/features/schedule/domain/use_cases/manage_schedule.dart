@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../activities/domain/entities/planning_context.dart';
 import '../entities/common_slot.dart';
 import '../entities/schedule_block.dart';
@@ -126,6 +128,14 @@ class ManageSchedule {
       final distance = _distanceService.distanceMeters(
         currentLocation,
         friendLocation,
+      );
+      debugPrint(
+        'NEARBY DISTANCE -> '
+        'Friend: ${friend.id} | '
+        'Friend GPS: ${friendLocation.latitude}, ${friendLocation.longitude} | '
+        'My GPS: ${currentLocation.latitude}, ${currentLocation.longitude} | '
+        'Distance: ${distance.toStringAsFixed(2)} m | '
+        'Inside radius: ${distance <= nearbyRadiusMeters}',
       );
 
       if (distance <= nearbyRadiusMeters) {

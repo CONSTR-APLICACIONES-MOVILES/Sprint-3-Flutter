@@ -50,6 +50,7 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/data/help_faq.json
 
   fonts:
     - family: Inter
