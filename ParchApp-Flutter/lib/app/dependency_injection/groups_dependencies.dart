@@ -22,6 +22,9 @@ import '../../features/groups/presentation/view_models/active_groups_view_model.
 import '../../features/groups/presentation/views/active_groups_view.dart';
 import '../../features/groups/data/repositories/cached_weather_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../features/groups/domain/repositories/group_chat.dart';
+import '../../features/groups/data/repositories/firestore_group_chat_repository.dart';
+import '../../features/groups/presentation/views/group_chat_view.dart';
 
 class GroupsDependencies {
   final ActiveGroupsRepository repository;
@@ -30,6 +33,7 @@ class GroupsDependencies {
   final WeatherRepository? weather;
   final AnalyticsService analytics;
   final String? Function()? currentUserId;
+  final GroupChat? chat;
 
   const GroupsDependencies({
     required this.repository,
@@ -38,6 +42,7 @@ class GroupsDependencies {
     this.weather,
     required this.analytics,
     this.currentUserId,
+    this.chat,
   });
 
   factory GroupsDependencies.mock({
@@ -65,6 +70,7 @@ class GroupsDependencies {
             OpenMeteoWeatherRepository(), SharedPreferences.getInstance),
         analytics: analytics,
         currentUserId: () => firebase.auth.currentUser?.uid,
+        chat: FirestoreGroupChatRepository(firebase.firestore, firebase.auth),
       );
 
   ActiveGroupsViewModel createViewModel() => ActiveGroupsViewModel(
@@ -85,6 +91,15 @@ class GroupsDependencies {
       ? const UnavailableFeatureView(
           title: 'Group invitations', selectedIndex: 1)
       : GroupInvitationsView(repository: community!);
+  Widget chatRoute(String groupId, {String? friendId, String? title}) =>
+      chat == null
+          ? const UnavailableFeatureView(title: 'Group Chat', selectedIndex: 1)
+          : GroupChatView(
+              key: ValueKey('$groupId/$friendId'),
+              chat: chat!,
+              groupId: groupId,
+              friendId: friendId,
+              title: title ?? 'House Chat');
   Widget activeGroupsRoute() => _ActiveGroupsEntry(dependencies: this);
 }
 

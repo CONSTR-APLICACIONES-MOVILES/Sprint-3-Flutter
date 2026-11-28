@@ -86,6 +86,12 @@ abstract final class AppRouter {
               builder: (context, state) =>
                   groupsDependencies.invitationsRoute()),
           GoRoute(
+              path: '/groups/chat/:groupId',
+              builder: (context, state) => groupsDependencies.chatRoute(
+                  state.pathParameters['groupId']!,
+                  friendId: state.uri.queryParameters['with'],
+                  title: state.uri.queryParameters['title'])),
+          GoRoute(
               path: AppRoutes.groupDetailsPattern,
               builder: (context, state) => groupsDependencies
                   .detailsRoute(state.pathParameters['groupId']!)),
